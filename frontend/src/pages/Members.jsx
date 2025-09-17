@@ -6,8 +6,13 @@
  */
 
 import React, { useEffect, useState } from "react";
-// import api from "../api/api"; // axios instance
-import { toast } from "react-toastify";
+
+// Utils
+import { useDebounce } from "../hooks/useDebounce";
+
+// Toast
+import { showSuccessToast, showErrorToast } from "../utils/toast";
+import { adminfetchAllStudents } from "../api";
 
 const Members = () => {
   const [members, setMembers] = useState([]);
@@ -15,35 +20,46 @@ const Members = () => {
   const [search, setSearch] = useState("");
   const [editingUser, setEditingUser] = useState(null);
   const [deletingUser, setDeletingUser] = useState(null);
+  const [previewImage, setPreviewImage] = useState(null);
+
+  // Debounce search input
+  const debouncedSearch = useDebounce(search, 500);
 
   useEffect(() => {
     fetchMembers();
   }, []);
 
+  // Apply filter only when debouncedSearch changes
+  useEffect(() => {
+    if (!debouncedSearch) {
+      setFiltered(members);
+    } else {
+      setFiltered(
+        members.filter(
+          (m) =>
+            m.schoolId?.toLowerCase().includes(debouncedSearch) ||
+            m.name?.toLowerCase().includes(debouncedSearch)
+        )
+      );
+    }
+  }, [debouncedSearch, members]);
+
   const fetchMembers = async () => {
     try {
-      const res = await api.get("/auth/members");
+      const res = await adminfetchAllStudents();
       if (res.data.success) {
         setMembers(res.data.users);
         setFiltered(res.data.users);
       }
     } catch (error) {
       console.error("Error fetching members:", error);
-      toast.error("Failed to load members");
+      showErrorToast("Failed to load members");
     }
   };
 
-  // search filter
+  // search handler only updates state
   const handleSearch = (e) => {
-    const value = e.target.value.toLowerCase();
-    setSearch(value);
-    setFiltered(
-      members.filter(
-        (m) =>
-          m.schoolId?.toLowerCase().includes(value) ||
-          m.name?.toLowerCase().includes(value)
-      )
-    );
+    setSearch(e.target.value.toLowerCase());
   };
 
   // update user
@@ -94,17 +110,26 @@ const Members = () => {
             key={user._id}
             className="flex items-center justify-between p-4 bg-white rounded-lg shadow-md"
           >
-            <div>
-              <p className="font-semibold">{user.name}</p>
-              <p className="text-sm text-gray-500">
-                {user.schoolId} • {user.username}
-              </p>
-              <p className="text-xs text-gray-400">
-                Role: {user.role}{" "}
-                {user.group ? `• Group: ${user.group.name}` : ""}
-              </p>
+            <div className="flex items-center gap-3">
+              <img
+                src={user.profileImage}
+                alt={user.name}
+                onClick={() => setPreviewImage(user.profileImage)}
+                className="object-cover w-12 h-12 border border-gray-200 rounded-full shadow-sm"
+              />
+              <div>
+                <p className="font-semibold">{user.name}</p>
+                <p className="text-sm text-gray-500">
+                  {user.schoolId} • {user.username}
+                </p>
+                <p className="text-xs text-gray-400">
+                  Role: {user.role === "user" ? "Student" : user.role}{" "}
+                  {user.group ? `• Group: ${user.group.name}` : ""}
+                </p>
+              </div>
             </div>
-            <div className="flex gap-2">
+
+            <div className="flex flex-col gap-2">
               <button
                 onClick={() => setEditingUser(user)}
                 className="px-3 py-1 text-sm text-white bg-blue-500 rounded-lg"
@@ -121,6 +146,29 @@ const Members = () => {
           </div>
         ))}
       </div>
+
+      {/* Image Modal */}
+      {previewImage && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70"
+          onClick={() => setPreviewImage(null)} // close when clicking backdrop
+        >
+          {console.log(previewImage)}
+          <div className="relative">
+            <img
+              src={previewImage}
+              alt="Preview"
+              className="max-w-[90vw] max-h-[90vh] rounded-lg shadow-lg"
+            />
+            <button
+              onClick={() => setPreviewImage(null)}
+              className="absolute px-3 py-1 text-sm font-extrabold text-white rounded-lg shadow-2xl top-2 right-2"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Edit Modal */}
       {editingUser && (

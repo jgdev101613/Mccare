@@ -8,7 +8,6 @@
 // src/pages/AdminDashboard.jsx
 import { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
-// import api from "../api/api";
 import {
   format,
   startOfMonth,
@@ -25,6 +24,15 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 
 // Toaster
 import { toast } from "react-toastify";
+import { showSuccessToast, showErrorToast } from "../utils/toast";
+
+import {
+  adminFetchAllStudentsDuties,
+  adminFetchAllGroups,
+  createDuty,
+  updateDuty,
+  deleteDuty,
+} from "../api";
 
 const AdminDashboard = () => {
   const { user, token } = useAuth();
@@ -49,9 +57,7 @@ const AdminDashboard = () => {
 
   const fetchAllDuties = async () => {
     try {
-      const { data } = await api.get("/duties", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const { data } = await adminFetchAllStudentsDuties();
 
       setDuties(data.duties);
 
@@ -70,9 +76,7 @@ const AdminDashboard = () => {
 
   const fetchGroups = async () => {
     try {
-      const { data } = await api.get("/group", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const { data } = await adminFetchAllGroups();
       setGroups(data.groups || []);
     } catch (err) {
       console.error("Error fetching groups:", err);
@@ -146,14 +150,30 @@ const AdminDashboard = () => {
 
       if (editingDuty) {
         // Edit duty
-        await api.put(`/duties/${editingDuty._id}`, dutyPayload, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        try {
+          const res = await updateDuty(editingDuty._id, dutyPayload);
+          if (res.data.success) {
+            showSuccessToast(res.data.message);
+          } else {
+            showErrorToast(res.data.message);
+          }
+        } catch (error) {
+          showErrorToast(err.response?.data.message);
+          console.error("Edit error:", err.response?.data || err.message);
+        }
       } else {
         // Add duty
-        await api.post("/duties", dutyPayload, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        try {
+          const res = await createDuty(dutyPayload);
+          if (res.data.success) {
+            showSuccessToast(res.data.message);
+          } else {
+            showErrorToast(res.data.message);
+          }
+        } catch (error) {
+          showErrorToast(err.response?.data.message);
+          console.error("Edit error:", err.response?.data || err.message);
+        }
       }
       await fetchAllDuties();
       setShowModal(false); // quick refresh
@@ -177,13 +197,11 @@ const AdminDashboard = () => {
               className="px-3 py-1 text-white bg-red-600 rounded hover:bg-red-700"
               onClick={async () => {
                 try {
-                  await api.delete(`/duties/${duty._id}`, {
-                    headers: { Authorization: `Bearer ${token}` },
-                  });
+                  await deleteDuty(duty._id);
                   await fetchAllDuties();
-                  toast.success("Duty deleted successfully!");
+                  showSuccessToast("Duty deleted successfully!");
                 } catch (err) {
-                  toast.error(
+                  showErrorToast(
                     err.response?.data?.message || "Failed to delete duty."
                   );
                 }

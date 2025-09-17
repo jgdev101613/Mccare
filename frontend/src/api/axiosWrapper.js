@@ -12,8 +12,18 @@ const defaultHeader = {
   Accept: "application/json",
 };
 
-export const axiosWrapper = axios.create({
+const axiosWrapper = axios.create({
   baseURL: import.meta.env.VITE_BACKEND_URL,
   withCredentials: true,
   headers: { ...defaultHeader },
 });
+
+// Interceptor → detect FormData and adjust headers
+axiosWrapper.interceptors.request.use((config) => {
+  if (config.data instanceof FormData) {
+    delete config.headers["Content-Type"]; // let Axios set multipart/form-data with boundary
+  }
+  return config;
+});
+
+export { axiosWrapper };

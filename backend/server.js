@@ -14,10 +14,8 @@ import job from "./lib/cron.js";
 
 // Routes Import
 import authRoutes from "./routes/authRoutes.js";
-import dutyRoutes from "./routes/dutyRoutes.js";
-import attendanceRoutes from "./routes/attendanceRoutes.js";
-import quoteRoutes from "./routes/quoteRoutes.js";
 import adminRoutes from "./routes/adminRoutes.js";
+import studentRoutes from "./routes/studentRoutes.js";
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -42,15 +40,13 @@ app.use(express.urlencoded({ limit: "10mb", extended: true }));
 
 // Job to run every 10 minutes
 job.start();
+app.get("/", (req, res) => {
+  res.send("MCare Backend");
+});
 
 // Routes
-app.get("/", (req, res) => {
-  res.send("Welcome to Time 2 Care");
-});
 app.use("/api/auth", authRoutes);
-app.use("/api/duties", dutyRoutes);
-app.use("/api/attendance", attendanceRoutes);
-app.use("/api/quotes", quoteRoutes);
+app.use("/api/student", studentRoutes);
 app.use("/api/admin", adminRoutes);
 
 // Listen to port

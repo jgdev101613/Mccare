@@ -7,13 +7,19 @@
 
 import { useState } from "react";
 import { useAuth } from "../context/AuthContext";
-import { showSuccessToast, showErrorToast } from "../utils/toast";
 // import api from "../api/api";
-import { changePassword } from "../api";
+import {
+  changePassword,
+  updateProfileImage,
+  updateUserInformation,
+} from "../api";
 
 // Icons
 import { Eye, EyeOff } from "lucide-react";
 import { PenLine, Camera, Download, Lock } from "lucide-react";
+
+// Toast
+import { showSuccessToast, showErrorToast } from "../utils/toast";
 
 const Profile = () => {
   const { user, setUser, token } = useAuth();
@@ -21,6 +27,7 @@ const Profile = () => {
   const [passwordModalOpen, setPasswordModalOpen] = useState(false);
   const [imageModalOpen, setImageModalOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [imageUploadLoading, setImageUploadingLoading] = useState(false);
   const [formData, setFormData] = useState({
     name: user?.name || "",
     section: user?.section || "",
@@ -47,23 +54,20 @@ const Profile = () => {
   // Handle profile info update
   const handleSaveInfo = async () => {
     try {
-      const res = await api.put(
-        `/auth/update/${user._id}/information`,
-        formData,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
+      const res = await updateUserInformation(user._id, formData);
       if (res.data.success) {
+        showSuccessToast(res.data.message);
         setUser(res.data.user);
         setModalOpen(false);
+      } else {
+        showErrorToast(res.data.message);
       }
     } catch (err) {
+      showErrorToast(err.response?.data.message);
       console.error("Update error:", err.response?.data || err.message);
     }
   };
 
-  console.log(user._id);
   // Handle profile info update
   const handleChangePassword = async () => {
     try {
@@ -91,20 +95,21 @@ const Profile = () => {
     data.append("image", selectedImage);
 
     try {
-      const res = await api.put(
-        `/auth/update/${user._id}/profile-image`,
-        data,
-        {
-          headers: { "Content-Type": "multipart/form-data" },
-        }
-      );
+      setImageUploadingLoading(true);
+      const res = await updateProfileImage(user._id, data);
       if (res.data.success) {
+        showSuccessToast(res.data.message);
         setUser(res.data.data);
         setImageModalOpen(false);
         setSelectedImage(null);
+      } else {
+        showErrorToast(res.data.message);
       }
     } catch (err) {
+      showErrorToast(err.response?.data.message);
       console.error("Image upload error:", err.response?.data || err.message);
+    } finally {
+      setImageUploadingLoading(false);
     }
   };
 
@@ -177,7 +182,7 @@ const Profile = () => {
         ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
 
         // --- Overlay Logo (inside QR) ---
-        const qrLogoSize = 160;
+        const qrLogoSize = 100;
         const qrLogoX = cardWidth / 2 - qrLogoSize / 2;
         const qrLogoY = qrY + qrSize / 2 - qrLogoSize / 2;
 
@@ -185,10 +190,10 @@ const Profile = () => {
         ctx.fillStyle = "#ffffff";
         ctx.beginPath();
         ctx.roundRect(
-          qrLogoX - 20,
-          qrLogoY - 20,
-          qrLogoSize + 40,
-          qrLogoSize + 40,
+          qrLogoX - 10,
+          qrLogoY - 10,
+          qrLogoSize + 20,
+          qrLogoSize + 20,
           30
         );
         ctx.fill();
@@ -254,15 +259,21 @@ const Profile = () => {
         <Info label="Name" value={user.name} />
         <Info label="Email" value={user.email} />
         <Info label="Username" value={user.username} />
-        <Info label="Section" value={user.section} />
-        <Info label="Course" value={user.course} />
-        <Info label="Department" value={user.department} />
-        <Info
-          label="Group"
-          value={
-            user.groups?.length > 0 ? user.groups[0].name : "Not in a group yet"
-          }
-        />
+        {user.role !== "admin" && (
+          <>
+            <Info label="Section" value={user.section} />
+            <Info label="Course" value={user.course} />
+            <Info label="Department" value={user.department} />
+            <Info
+              label="Group"
+              value={
+                user.groups?.length > 0
+                  ? user.groups[0].name
+                  : "Not in a group yet"
+              }
+            />
+          </>
+        )}
       </div>
 
       {/* QR Code */}
@@ -452,7 +463,26 @@ const Profile = () => {
             <input
               type="file"
               accept="image/*"
-              onChange={(e) => setSelectedImage(e.target.files[0])}
+              onChange={(e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                // Check for HEIC/HEIF
+                if (
+                  file.type === "image/heic" ||
+                  file.type === "image/heif" ||
+                  file.name.toLowerCase().endsWith(".heic") ||
+                  file.name.toLowerCase().endsWith(".heif")
+                ) {
+                  showErrorToast(
+                    "HEIC/HEIF images are not supported. Please upload a JPG or PNG."
+                  );
+                  e.target.value = ""; // reset input
+                  return;
+                }
+
+                setSelectedImage(file);
+              }}
               className="mb-4"
             />
             <div className="flex justify-end gap-2">
@@ -466,7 +496,7 @@ const Profile = () => {
                 onClick={handleSaveImage}
                 className="px-4 py-2 text-white bg-green-600 rounded-lg hover:bg-green-700"
               >
-                Upload
+                {imageUploadLoading ? "Uploading.." : "Upload"}
               </button>
             </div>
           </div>

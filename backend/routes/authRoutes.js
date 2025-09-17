@@ -37,10 +37,7 @@ const generateToken = (userId) => {
 // Generate QR Code for School ID
 const generateQRCode = async (schoolId) => {
   try {
-    const baseUrl = process.env.BASE_URL || "http://localhost:5000"; // fallback
-    const url = `${baseUrl}/api/attendance/mark/${schoolId}`;
-
-    const qrCodeDataURL = await QRCode.toDataURL(url, {
+    const qrCodeDataURL = await QRCode.toDataURL(schoolId, {
       errorCorrectionLevel: "M",
       type: "image/png",
       width: 256,

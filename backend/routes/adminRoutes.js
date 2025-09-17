@@ -10,15 +10,22 @@ import express from "express";
 // Models
 import Attendance from "../models/Attendance.js";
 import Group from "../models/Group.js";
+import Duty from "../models/Duty.js";
 import User from "../models/User.js";
 
 // Authentication
 import protectRoutes from "../middleware/auth.middleware.js";
 import adminOnly from "../middleware/auth.admin.js";
 
+// Mailer
+import {
+  sendDutyNotification,
+  sendUpdateDutyNotification,
+} from "../lib/mailer.js";
+
 const adminRoutes = express.Router();
 
-// ********** STUDENTS ********** //
+// ********** START: STUDENTS ENDPOINTS ********** //
 /** Fetch All Students and their information **/
 adminRoutes.get(
   "/students/fetchAllStudents",
@@ -45,7 +52,223 @@ adminRoutes.get(
   }
 );
 
-// ********** GROUP ********** //
+// ********** END: STUDENTS ENDPOINTS ********** //
+
+// ********** START: DUTIES ENDPOINTs ********** //
+/** Create a Duty (Create Duty: date, place, time, clinical) With Email Notif **/
+adminRoutes.post("/duty/create", protectRoutes, adminOnly, async (req, res) => {
+  try {
+    const { groupId, date, place, time, clinicalInstructor, area } = req.body;
+
+    if (!groupId || !date || !clinicalInstructor || !area) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "All fields (group, date, place, time, clinicalInstructor, area) are required.",
+      });
+    }
+
+    // Check group exists
+    const group = await Group.findById(groupId).populate("members");
+    if (!group) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Group not found." });
+    }
+
+    // Normalize date to ignore time portion (only check by day)
+    const startOfDay = new Date(date);
+    startOfDay.setHours(0, 0, 0, 0);
+
+    const endOfDay = new Date(date);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    // Check if duty already exists for this group on the same day
+    const existingDuty = await Duty.findOne({
+      group: groupId,
+      date: { $gte: startOfDay, $lte: endOfDay },
+    });
+
+    if (existingDuty) {
+      return res.status(400).json({
+        success: false,
+        message: "This group already has a duty assigned on the same date.",
+      });
+    }
+
+    // Create duty
+    const duty = await Duty.create({
+      group: groupId,
+      date,
+      place,
+      time,
+      clinicalInstructor,
+      area,
+    });
+
+    // Collect recipient info (email + name) from the group, not duty
+    const recipients = group.members.map((member) => ({
+      email: member.email,
+      name: member.name,
+    }));
+
+    // Send notification
+    if (recipients.length > 0) {
+      await sendDutyNotification(recipients, duty, group.name);
+    }
+
+    res.status(201).json({
+      success: true,
+      message: "Duty created and assigned to group.",
+      duty,
+      assignedMembers: group.members,
+    });
+  } catch (error) {
+    console.error("Error creating duty:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+/** Update a Duty (edit duty: date, place, time, task)With Email Notif **/
+adminRoutes.put(
+  "/duty/update/:id",
+  protectRoutes,
+  adminOnly,
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { date, place, time, clinicalInstructor, area } = req.body;
+
+      const duty = await Duty.findById(id).populate({
+        path: "group",
+        populate: { path: "members" }, // load group + members
+      });
+
+      if (!duty) {
+        return res.status(404).json({
+          success: false,
+          message: "Duty not found.",
+        });
+      }
+
+      // Update fields
+      if (date) {
+        const dutyDate = new Date(date);
+        dutyDate.setHours(0, 0, 0, 0);
+        duty.date = dutyDate;
+      }
+      if (place) duty.place = place.trim();
+      if (time) duty.time = time.trim();
+      if (clinicalInstructor)
+        duty.clinicalInstructor = clinicalInstructor.trim();
+      if (area) duty.area = area.trim();
+
+      await duty.save();
+
+      // Collect recipient info (email + name) from group members
+      const recipients = duty.group.members.map((member) => ({
+        email: member.email,
+        name: member.name,
+      }));
+
+      // Send notification
+      if (recipients.length > 0) {
+        await sendUpdateDutyNotification(recipients, duty, duty.group.name);
+      }
+
+      res.status(200).json({
+        success: true,
+        message:
+          "Duty updated successfully. Notifications sent to group members.",
+        duty,
+      });
+    } catch (error) {
+      console.error("Error in PUT /duties/:id:", error);
+      return res.status(500).json({
+        success: false,
+        message: `Internal Server Error: ${error.message}`,
+      });
+    }
+  }
+);
+
+/** Fetch All Duties **/
+adminRoutes.get(
+  "/duty/fetchAllDuties",
+  protectRoutes,
+  adminOnly,
+  async (req, res) => {
+    try {
+      const duties = await Duty.find()
+        .populate({
+          path: "group",
+          populate: { path: "members", select: "name email" },
+        })
+        .sort({ date: 1 });
+
+      res.status(200).json({ success: true, duties });
+    } catch (error) {
+      console.error("Error fetching duties:", error);
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
+);
+
+/** Fetch Duties Of A Particular Group **/
+adminRoutes.get(
+  "/duty/fetchAllDuties/:groupId",
+  protectRoutes,
+  adminOnly,
+  async (req, res) => {
+    try {
+      const { groupId } = req.params;
+
+      const duties = await Duty.find({ group: groupId })
+        .populate({
+          path: "group",
+          populate: { path: "members", select: "name email" },
+        })
+        .sort({ date: 1 });
+
+      res.status(200).json({ success: true, duties });
+    } catch (error) {
+      console.error("Error fetching group duties:", error);
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
+);
+
+/** Delete A Duty **/
+adminRoutes.delete(
+  "/duty/delete/:id",
+  protectRoutes,
+  adminOnly,
+  async (req, res) => {
+    try {
+      const duty = await Duty.findById(req.params.id);
+
+      if (!duty) {
+        return res
+          .status(404)
+          .json({ success: false, message: "Duty not found." });
+      }
+
+      await duty.deleteOne();
+      res
+        .status(200)
+        .json({ success: true, message: "Duty deleted successfully." });
+    } catch (error) {
+      console.error("Error in DELETE /duties/:id:", error);
+      return res.status(500).json({
+        success: false,
+        message: `Internal Server Error: ${error.message}`,
+      });
+    }
+  }
+);
+// ********** END: DUTIES ENDPOINTs ********** //
+
+// ********** START: GROUP ENDPOINTS ********** //
 /** Create a Group: Admin creates a group with name and members **/
 adminRoutes.post("/group", protectRoutes, adminOnly, async (req, res) => {
   try {
@@ -358,5 +581,113 @@ adminRoutes.delete("group/:id", protectRoutes, adminOnly, async (req, res) => {
     });
   }
 });
+
+// ********** END: GROUP ENDPOINTS ********** //
+
+// ********** START: ATTENDANCE ENDPOINTS ********** //
+/** Mark A Student Attendance **/
+adminRoutes.get(
+  "/attendance/mark/:schoolId",
+  protectRoutes,
+  adminOnly,
+  async (req, res) => {
+    try {
+      const { schoolId } = req.params;
+
+      const user = await User.findOne({ schoolId });
+      if (!user) {
+        return res
+          .status(404)
+          .json({ success: false, message: "User not found." });
+      }
+
+      const today = new Date();
+      const dateOnly = new Date(
+        today.getFullYear(),
+        today.getMonth(),
+        today.getDate()
+      ); // midnight reset
+
+      // Check if attendance already exists
+      const existingAttendance = await Attendance.findOne({
+        schoolId,
+        date: dateOnly,
+      });
+
+      if (existingAttendance) {
+        return res.status(400).json({
+          success: false,
+          message: "Attendance already marked for today.",
+        });
+      }
+
+      // Save new attendance
+      const attendance = new Attendance({
+        user: user._id,
+        schoolId,
+        date: dateOnly,
+        timeIn: today.toTimeString().split(" ")[0], // HH:mm:ss
+      });
+
+      await attendance.save();
+
+      console.log(
+        "✅ Marked User(" + schoolId + ") as present: ",
+        req.originalUrl
+      );
+
+      res.status(201).json({
+        success: true,
+        message: "Attendance marked successfully!",
+        data: {
+          name: user.name,
+          schoolId: user.schoolId,
+          date: attendance.date,
+          timeIn: attendance.timeIn,
+        },
+      });
+    } catch (error) {
+      console.error("Error marking attendance:", error);
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
+);
+
+// Get attendance records of ALL users (admin only)
+adminRoutes.get(
+  "/attendance/fetchAllStudentsAttendance",
+  protectRoutes,
+  adminOnly,
+  async (req, res) => {
+    try {
+      const records = await Attendance.find()
+        .populate("user", "name username schoolId section course department") // attach user details
+        .sort({ date: -1 }) // latest first
+        .select("-__v") // remove __v field
+        .lean();
+
+      if (!records || records.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: "No attendance records found.",
+        });
+      }
+
+      console.log("✅ Get all attendance record: ", req.originalUrl);
+
+      res.status(200).json({
+        success: true,
+        message: "All attendance records retrieved successfully.",
+        count: records.length,
+        records,
+      });
+    } catch (error) {
+      console.error("Error fetching all attendance:", error);
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
+);
+
+// ********** END: ATTENDANCE ENDPOINTS ********** //
 
 export default adminRoutes;

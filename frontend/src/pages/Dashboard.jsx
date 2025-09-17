@@ -7,7 +7,6 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
-// import api from "../api/api";
 import {
   format,
   startOfMonth,
@@ -22,6 +21,7 @@ import {
 } from "date-fns";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Briefcase, Clock, Star } from "lucide-react";
+import { fetchUserDuties, fetchUserAttendance } from "../api";
 
 import quotes from "../data/quotes"; // ✅ local quotes
 
@@ -39,7 +39,7 @@ const Dashboard = () => {
   useEffect(() => {
     const fetchDuties = async () => {
       try {
-        const { data } = await api.get(`/duties/user/${user._id}`);
+        const { data } = await fetchUserDuties(user._id);
         setDuties(data.duties || []);
 
         // map duties by date
@@ -54,13 +54,13 @@ const Dashboard = () => {
         const message =
           err.response?.data?.message ||
           "Failed to fetch duties. Please try again.";
-        setError(message);
+        setError("You don't belong to a group yet.");
       }
     };
 
     const fetchAttendance = async () => {
       try {
-        const { data } = await api.get(`/attendance/${user.schoolId}`);
+        const { data } = await fetchUserAttendance(user.schoolId);
         setAttendance(data.records || []);
 
         // map attendance by date

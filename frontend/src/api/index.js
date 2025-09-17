@@ -15,17 +15,30 @@ export const registerUser = (data) =>
 
 /** ADMIN ENDPOINTS **/
 export const adminFetchAllStudentsDuties = () =>
-  axiosWrapper.get(`/api/duties`);
-export const adminFetchAllGroups = () => axiosWrapper.get(`api/group`);
+  axiosWrapper.get(`/api/admin/duty/fetchAllDuties`);
+export const adminFetchAllGroups = () =>
+  axiosWrapper.get(`api/admin/group/fetchAllgroups`);
 export const adminfetchAllStudents = () =>
-  axios.get(`api/admin/fetchAllStudents`);
+  axiosWrapper.get(`api/admin/students/fetchAllStudents`);
 
 /** ADMIN/USER ENDPOINTS **/
 export const changePassword = (data, id) =>
   axiosWrapper.put(`/api/auth/update/${id}/password`, data);
+export const updateProfileImage = (id, data) =>
+  axiosWrapper.put(`/api/auth/update/${id}/profile-image`, data);
+
+/** DUTY ENDPOIONTS **/
+export const createDuty = (dutyPayload) =>
+  axiosWrapper.post(`api/admin/duty/create`, dutyPayload);
+export const updateDuty = (id, dutyPayload) =>
+  axiosWrapper.put(`api/admin/duty/update/${id}`, dutyPayload);
+export const deleteDuty = (id) =>
+  axiosWrapper.delete(`api/admin/duty/delete/${id}`);
 
 /** STUDENT ENDPOINTS **/
 export const fetchUserDuties = (id) =>
-  axiosWrapper.get(`/api/duties/user/${user._id}`);
+  axiosWrapper.get(`/api/student/duties/fetchDuties/${id}`);
 export const fetchUserAttendance = (schoolId) =>
-  axiosWrapper.get(`/api/attendance/${schoolId}`);
+  axiosWrapper.get(`/api/student/attendance/fetchAttendance/${schoolId}`);
+export const updateUserInformation = (id, data) =>
+  axiosWrapper.put(`/api/auth/update/${id}/information`, data);

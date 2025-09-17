@@ -16,7 +16,7 @@ import { sendWelcomeEmail } from "../lib/mailer.js";
 // Authentication
 import protectRoutes from "../middleware/auth.middleware.js";
 import selfOrAdmin from "../middleware/auth.user.js";
-import adminOnly from "../middleware/auth.admin.js"
+import adminOnly from "../middleware/auth.admin.js";
 
 // Mailer
 import { sendPasswordChangeNotification } from "../lib/mailer.js";
@@ -39,7 +39,7 @@ const generateQRCode = async (schoolId) => {
   try {
     const baseUrl = process.env.BASE_URL || "http://localhost:5000"; // fallback
     const url = `${baseUrl}/api/attendance/mark/${schoolId}`;
-    
+
     const qrCodeDataURL = await QRCode.toDataURL(url, {
       errorCorrectionLevel: "M",
       type: "image/png",
@@ -61,9 +61,9 @@ const passwordOptions = {
 };
 
 // Check if a number
-const isNumber = (variable) =>{
-  return typeof variable === 'number' && !Number.isNaN(variable);
-}
+const isNumber = (variable) => {
+  return typeof variable === "number" && !Number.isNaN(variable);
+};
 
 // --- USER AUTHENTICATION --- //
 
@@ -72,7 +72,18 @@ const isNumber = (variable) =>{
  */
 authRoutes.post("/register", async (req, res) => {
   try {
-    const { email, username, password, name, course, year, section, department, schoolId } = req.body;
+    const {
+      email,
+      username,
+      password,
+      name,
+      course,
+      year,
+      section,
+      department,
+      schoolId,
+      role,
+    } = req.body;
 
     // --- VALIDATIONS --- //
     const hasSpace = /\s/.test(username);
@@ -80,17 +91,22 @@ authRoutes.post("/register", async (req, res) => {
     if (hasSpace) {
       return res
         .status(400)
-        .json({success: false, message: "Username can't have spaces."})
+        .json({ success: false, message: "Username can't have spaces." });
     }
 
     if (!isNumber(Number(year))) {
       return res
         .status(400)
-        .json({success: false, message: "Year should be a number."})
+        .json({ success: false, message: "Year should be a number." });
     }
 
     // Check If Fields Are Empty
-    if (!email.trim() || !username.trim() || !password.trim() || !schoolId.trim())
+    if (
+      !email.trim() ||
+      !username.trim() ||
+      !password.trim() ||
+      !schoolId.trim()
+    )
       return res
         .status(400)
         .json({ success: false, message: "Required fields cannot be empty." });
@@ -152,6 +168,7 @@ authRoutes.post("/register", async (req, res) => {
       department,
       profileImage,
       qrCode,
+      role: role || "user",
     });
 
     await user.save();
@@ -190,8 +207,8 @@ authRoutes.post("/register", async (req, res) => {
 });
 
 /**
- * Login A User 
- */ 
+ * Login A User
+ */
 authRoutes.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -239,7 +256,7 @@ authRoutes.post("/login", async (req, res) => {
         _id: user._id,
         schoolId: user.schoolId,
         username: user.username,
-        name:user.name,
+        name: user.name,
         email: user.email,
         role: user.role,
         profileImage: user.profileImage,
@@ -268,18 +285,18 @@ authRoutes.post("/login", async (req, res) => {
 authRoutes.put("/regenerate-qr/:userId", async (req, res) => {
   try {
     const { userId } = req.params;
-    
+
     const user = await User.findById(userId);
     if (!user) {
       return res.status(404).json({
         success: false,
-        message: "User not found."
+        message: "User not found.",
       });
     }
 
     // Generate new QR code
     const newQrCode = await generateQRCode(user.schoolId);
-    
+
     // Update user with new QR code
     user.qrCode = newQrCode;
     await user.save();
@@ -287,7 +304,7 @@ authRoutes.put("/regenerate-qr/:userId", async (req, res) => {
     res.status(200).json({
       success: true,
       message: "QR code regenerated successfully!",
-      qrCode: newQrCode
+      qrCode: newQrCode,
     });
   } catch (error) {
     console.log("Error regenerating QR code: ", error);
@@ -303,59 +320,70 @@ authRoutes.put("/regenerate-qr/:userId", async (req, res) => {
 /**
  * Edit User Password
  */
-authRoutes.put("/update/:id/password", protectRoutes, selfOrAdmin, async (req, res) => {
-  try {
-    const { currentPassword, newPassword } = req.body;
+authRoutes.put(
+  "/update/:id/password",
+  protectRoutes,
+  selfOrAdmin,
+  async (req, res) => {
+    try {
+      const { currentPassword, newPassword } = req.body;
 
-    if (!newPassword || newPassword.length < 6) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Password must be at least 6 characters" });
-    }
+      if (!newPassword || newPassword.length < 6) {
+        return res.status(400).json({
+          success: false,
+          message: "Password must be at least 6 characters",
+        });
+      }
 
-    if (!validator.isStrongPassword(newPassword, passwordOptions))
-      return res.status(400).json({
-        success: false,
-        message:
-          "Your password is weak. It must be at least 8 characters long, contain at least one uppercase letter, one lowercase letter, one number, and one special character.",
+      if (!validator.isStrongPassword(newPassword, passwordOptions))
+        return res.status(400).json({
+          success: false,
+          message:
+            "Your password is weak. It must be at least 8 characters long, contain at least one uppercase letter, one lowercase letter, one number, and one special character.",
+        });
+
+      const user = await User.findById(req.params.id);
+      if (!user) {
+        return res
+          .status(404)
+          .json({ success: false, message: "User not found" });
+      }
+
+      // 🔑 If the logged-in user is not admin, require currentPassword check
+      if (req.user.role !== "admin") {
+        if (!currentPassword) {
+          return res.status(400).json({
+            success: false,
+            message: "Current password is required",
+          });
+        }
+
+        const isMatch = await user.comparePassword(currentPassword);
+        if (!isMatch) {
+          return res.status(400).json({
+            success: false,
+            message: "Current password is incorrect",
+          });
+        }
+      }
+
+      user.password = newPassword;
+      await user.save();
+
+      if (req.user.role !== "admin") {
+        await sendPasswordChangeNotification(user);
+      }
+
+      res.json({
+        success: true,
+        message: "Password updated successfully",
       });
-
-    const user = await User.findById(req.params.id);
-    if (!user) {
-      return res.status(404).json({ success: false, message: "User not found" });
+    } catch (error) {
+      console.error("❌ Update password error:", error.message);
+      res.status(500).json({ success: false, message: "Server error" });
     }
-
-    // 🔑 If the logged-in user is not admin, require currentPassword check
-    if (req.user.role !== "admin") {
-      if (!currentPassword) {
-        return res.status(400).json({
-          success: false,
-          message: "Current password is required",
-        });
-      }
-
-      const isMatch = await user.comparePassword(currentPassword);
-      if (!isMatch) {
-        return res.status(400).json({
-          success: false,
-          message: "Current password is incorrect",
-        });
-      }
-    }
-
-    user.password = newPassword;
-    await user.save();
-    
-    if (req.user.role !== "admin") {
-      await sendPasswordChangeNotification(user);
-    }
-
-    res.json({ success: true, message: "Password updated successfully" });
-  } catch (error) {
-    console.error("❌ Update password error:", error.message);
-    res.status(500).json({ success: false, message: "Server error" });
   }
-});
+);
 
 /**
  * Edit User Profile Image
@@ -364,11 +392,13 @@ authRoutes.put(
   "/update/:id/profile-image",
   protectRoutes,
   selfOrAdmin,
-  upload.single("image"),  // <-- "image" is the field name in Postman
+  upload.single("image"), // <-- "image" is the field name in Postman
   async (req, res) => {
     try {
       if (!req.file) {
-        return res.status(400).json({ success: false, message: "No image uploaded" });
+        return res
+          .status(400)
+          .json({ success: false, message: "No image uploaded" });
       }
 
       const uploadResponse = await cloudinary.uploader.upload(req.file.path, {
@@ -398,91 +428,90 @@ authRoutes.put(
 /**
  * Edit Username
  */
-authRoutes.put("/update/:id/username", protectRoutes, selfOrAdmin, async (req, res) => {
-  try {
-    const { username } = req.body;
+authRoutes.put(
+  "/update/:id/username",
+  protectRoutes,
+  selfOrAdmin,
+  async (req, res) => {
+    try {
+      const { username } = req.body;
 
-    if (!username || username.trim() === "") {
-      return res.status(400).json({ success: false, message: "Username cannot be empty" });
+      if (!username || username.trim() === "") {
+        return res
+          .status(400)
+          .json({ success: false, message: "Username cannot be empty" });
+      }
+
+      const user = await User.findByIdAndUpdate(
+        req.params.id,
+        { username },
+        { new: true }
+      ).select("-password");
+
+      if (!user) {
+        return res
+          .status(404)
+          .json({ success: false, message: "User not found" });
+      }
+
+      res.json({
+        success: true,
+        message: "Username updated successfully",
+        data: user,
+      });
+    } catch (error) {
+      console.error("❌ Update username error:", error.message);
+      res.status(500).json({ success: false, message: "Server error" });
     }
-
-    const user = await User.findByIdAndUpdate(
-      req.params.id,
-      { username },
-      { new: true }
-    ).select("-password");
-
-    if (!user) {
-      return res.status(404).json({ success: false, message: "User not found" });
-    }
-
-    res.json({ success: true, message: "Username updated successfully", data: user });
-  } catch (error) {
-    console.error("❌ Update username error:", error.message);
-    res.status(500).json({ success: false, message: "Server error" });
   }
-});
+);
 
 /**
  * Edit User Information
  */
-authRoutes.put("/update/:id/information", protectRoutes, selfOrAdmin, async (req, res) => {
-  try {
-    const { id } = req.params;
+authRoutes.put(
+  "/update/:id/information",
+  protectRoutes,
+  selfOrAdmin,
+  async (req, res) => {
+    try {
+      const { id } = req.params;
 
-    // Extract fields
-    const { name, section, course, department } = req.body;
+      // Extract fields
+      const { name, section, course, department } = req.body;
 
-    // Build update object dynamically, only if field is not blank
-    const updateData = {};
-    if (name && name.trim() !== "") updateData.name = name;
-    if (section && section.trim() !== "") updateData.section = section;
-    if (course && course.trim() !== "") updateData.course = course;
-    if (department && department.trim() !== "") updateData.department = department;
+      // Build update object dynamically, only if field is not blank
+      const updateData = {};
+      if (name && name.trim() !== "") updateData.name = name;
+      if (section && section.trim() !== "") updateData.section = section;
+      if (course && course.trim() !== "") updateData.course = course;
+      if (department && department.trim() !== "")
+        updateData.department = department;
 
-    // Update user
-    const updatedUser = await User.findByIdAndUpdate(
-      id,
-      { $set: updateData },
-      { new: true, runValidators: true }
-    );
+      // Update user
+      const updatedUser = await User.findByIdAndUpdate(
+        id,
+        { $set: updateData },
+        { new: true, runValidators: true }
+      );
 
-    if (!updatedUser) {
-      return res.status(404).json({ success: false, message: "User not found." });
+      if (!updatedUser) {
+        return res
+          .status(404)
+          .json({ success: false, message: "User not found." });
+      }
+
+      res.json({
+        success: true,
+        message: "User updated successfully.",
+        user: updatedUser,
+      });
+    } catch (error) {
+      console.error("Update error:", error.message);
+      res.status(500).json({ success: false, message: "Server error." });
     }
-
-    res.json({
-      success: true,
-      message: "User updated successfully.",
-      user: updatedUser,
-    });
-  } catch (error) {
-    console.error("Update error:", error.message);
-    res.status(500).json({ success: false, message: "Server error." });
   }
-});
-
-/**
- * Get All Members / Users
- */
-authRoutes.get("/members", protectRoutes, adminOnly, async (req, res) => {
-  try {
-    const users = await User.find()
-      .populate("group", "name") // optional: show group name
-      .lean();
-
-    res.status(200).json({
-      success: true,
-      users,
-    });
-  } catch (error) {
-    console.error("Error in GET /members:", error.message);
-    res.status(500).json({
-      success: false,
-      message: "Server error.",
-    });
-  }
-});
+);
 
 /**
  * Admin: Edit User Information
@@ -490,24 +519,20 @@ authRoutes.get("/members", protectRoutes, adminOnly, async (req, res) => {
 authRoutes.put("/update/:id", protectRoutes, adminOnly, async (req, res) => {
   try {
     const { id } = req.params;
-    const {
-      schoolId,
-      username,
-      name,
-      section,
-      course,
-      department,
-      role,
-    } = req.body;
+    const { schoolId, username, name, section, course, department, role } =
+      req.body;
 
     // Build update object dynamically (only include non-empty fields)
     const updateData = {};
-    if (schoolId && schoolId.trim() !== "") updateData.schoolId = schoolId.trim();
-    if (username && username.trim() !== "") updateData.username = username.trim();
+    if (schoolId && schoolId.trim() !== "")
+      updateData.schoolId = schoolId.trim();
+    if (username && username.trim() !== "")
+      updateData.username = username.trim();
     if (name && name.trim() !== "") updateData.name = name.trim();
     if (section && section.trim() !== "") updateData.section = section.trim();
     if (course && course.trim() !== "") updateData.course = course.trim();
-    if (department && department.trim() !== "") updateData.department = department.trim();
+    if (department && department.trim() !== "")
+      updateData.department = department.trim();
     if (role && ["user", "admin"].includes(role)) updateData.role = role;
 
     const updatedUser = await User.findByIdAndUpdate(
@@ -573,11 +598,7 @@ authRoutes.get("/members/user", protectRoutes, adminOnly, async (req, res) => {
     if (search && search.trim() !== "") {
       const regex = new RegExp(search, "i");
       query = {
-        $or: [
-          { username: regex },
-          { email: regex },
-          { schoolId: regex }
-        ]
+        $or: [{ username: regex }, { email: regex }, { schoolId: regex }],
       };
     }
 
@@ -595,7 +616,5 @@ authRoutes.get("/members/user", protectRoutes, adminOnly, async (req, res) => {
     });
   }
 });
-
-
 
 export default authRoutes;

@@ -8,7 +8,7 @@
 // src/pages/AdminDashboard.jsx
 import { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
-import api from "../api/api";
+// import api from "../api/api";
 import {
   format,
   startOfMonth,
@@ -48,36 +48,36 @@ const AdminDashboard = () => {
   });
 
   const fetchAllDuties = async () => {
-      try {
-        const { data } = await api.get("/duties", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+    try {
+      const { data } = await api.get("/duties", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
-        setDuties(data.duties);
+      setDuties(data.duties);
 
-        // map duties by date (yyyy-MM-dd)
-        const map = {};
-        data.duties.forEach((duty) => {
-          const dutyDate = format(new Date(duty.date), "yyyy-MM-dd");
-          if (!map[dutyDate]) map[dutyDate] = [];
-          map[dutyDate].push(duty);
-        });
-        setDutyMap(map);
-      } catch (err) {
-        console.error("Error fetching all duties (admin):", err);
-      } 
-    };
+      // map duties by date (yyyy-MM-dd)
+      const map = {};
+      data.duties.forEach((duty) => {
+        const dutyDate = format(new Date(duty.date), "yyyy-MM-dd");
+        if (!map[dutyDate]) map[dutyDate] = [];
+        map[dutyDate].push(duty);
+      });
+      setDutyMap(map);
+    } catch (err) {
+      console.error("Error fetching all duties (admin):", err);
+    }
+  };
 
-    const fetchGroups = async () => {
-      try {
-        const { data } = await api.get("/group", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        setGroups(data.groups || []);
-      } catch (err) {
-        console.error("Error fetching groups:", err);
-      } 
-    };
+  const fetchGroups = async () => {
+    try {
+      const { data } = await api.get("/group", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setGroups(data.groups || []);
+    } catch (err) {
+      console.error("Error fetching groups:", err);
+    }
+  };
 
   // Fetch all duties
   useEffect(() => {
@@ -140,7 +140,7 @@ const AdminDashboard = () => {
     setIsLoading(true);
     try {
       const dutyPayload = {
-      ...form,
+        ...form,
         time: `${form.timeFrom} - ${form.timeTo}`, // store as string
       };
 
@@ -156,7 +156,7 @@ const AdminDashboard = () => {
         });
       }
       await fetchAllDuties();
-      setShowModal(false);// quick refresh
+      setShowModal(false); // quick refresh
     } catch (err) {
       console.error("Error saving duty:", err);
     } finally {
@@ -174,7 +174,7 @@ const AdminDashboard = () => {
           <p>Are you sure you want to delete this duty?</p>
           <div className="flex gap-2">
             <button
-              className="px-3 py-1 rounded bg-red-600 text-white hover:bg-red-700"
+              className="px-3 py-1 text-white bg-red-600 rounded hover:bg-red-700"
               onClick={async () => {
                 try {
                   await api.delete(`/duties/${duty._id}`, {
@@ -193,7 +193,7 @@ const AdminDashboard = () => {
               Confirm
             </button>
             <button
-              className="px-3 py-1 rounded bg-gray-300 hover:bg-gray-400"
+              className="px-3 py-1 bg-gray-300 rounded hover:bg-gray-400"
               onClick={closeToast}
             >
               Cancel
@@ -209,10 +209,10 @@ const AdminDashboard = () => {
     <div>
       {/* Calendar header */}
       <div className="flex flex-col items-center">
-        <div className="flex justify-between items-center w-full mb-6">
+        <div className="flex items-center justify-between w-full mb-6">
           <button
             onClick={handlePrevMonth}
-            className="p-2 rounded-full hover:bg-green-100 text-green-700 transition"
+            className="p-2 text-green-700 transition rounded-full hover:bg-green-100"
           >
             <ChevronLeft className="w-5 h-5" />
           </button>
@@ -223,7 +223,7 @@ const AdminDashboard = () => {
 
           <button
             onClick={handleNextMonth}
-            className="p-2 rounded-full hover:bg-green-100 text-green-700 transition"
+            className="p-2 text-green-700 transition rounded-full hover:bg-green-100"
           >
             <ChevronRight className="w-5 h-5" />
           </button>
@@ -231,13 +231,13 @@ const AdminDashboard = () => {
 
         <button
           onClick={openAddModal}
-          className="mb-4 bg-green-600 text-white px-4 py-2 rounded-lg shadow hover:bg-green-700 transition"
+          className="px-4 py-2 mb-4 text-white transition bg-green-600 rounded-lg shadow hover:bg-green-700"
         >
           + Add Duty
         </button>
 
         {/* Days of week */}
-        <div className="grid grid-cols-7 gap-2 w-full text-center mb-2">
+        <div className="grid w-full grid-cols-7 gap-2 mb-2 text-center">
           {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((day) => (
             <div key={day} className="text-sm font-semibold text-gray-500">
               {day}
@@ -246,7 +246,7 @@ const AdminDashboard = () => {
         </div>
 
         {/* Dates */}
-        <div className="grid grid-cols-7 gap-2 w-full">
+        <div className="grid w-full grid-cols-7 gap-2">
           {days.map((day) => {
             const dateKey = format(day, "yyyy-MM-dd");
             const hasDuty = dutyMap[dateKey];
@@ -260,15 +260,17 @@ const AdminDashboard = () => {
                 onClick={() => setSelectedDate(day)}
                 className={`h-12 flex items-center justify-center rounded-full cursor-pointer relative text-sm font-medium transition
                   ${inMonth ? "text-gray-900" : "text-gray-300"}
-                  ${isSelected ? "bg-green-600 text-white shadow-lg" : "hover:bg-green-100"}
-                  ${(isToday && !isSelected ? "text-green-600" : "")}`}
+                  ${
+                    isSelected
+                      ? "bg-green-600 text-white shadow-lg"
+                      : "hover:bg-green-100"
+                  }
+                  ${isToday && !isSelected ? "text-green-600" : ""}`}
               >
-                <span>
-                  {format(day, "d")}
-                </span>
+                <span>{format(day, "d")}</span>
 
-                {(hasDuty && !isSelected) && (
-                  <span className="absolute bottom-1 w-2 h-2 bg-green-500 rounded-full"></span>
+                {hasDuty && !isSelected && (
+                  <span className="absolute w-2 h-2 bg-green-500 rounded-full bottom-1"></span>
                 )}
               </div>
             );
@@ -277,8 +279,8 @@ const AdminDashboard = () => {
       </div>
 
       {/* Duty info panel */}
-      <div className="mt-6 bg-white shadow-md rounded-2xl p-5">
-        <h3 className="text-lg font-bold text-green-700 mb-3">
+      <div className="p-5 mt-6 bg-white shadow-md rounded-2xl">
+        <h3 className="mb-3 text-lg font-bold text-green-700">
           {format(selectedDate, "MMMM d, yyyy")}
         </h3>
 
@@ -297,16 +299,14 @@ const AdminDashboard = () => {
                 {duty.place || "—"}
               </p>
               <p className="text-sm text-gray-700">
-                <span className="font-semibold">Time:</span>{" "}
-                {duty.time || "—"}
+                <span className="font-semibold">Time:</span> {duty.time || "—"}
               </p>
               <p className="text-sm text-gray-700">
                 <span className="font-semibold">Clinical Instructor:</span>{" "}
                 {duty.clinicalInstructor || "—"}
               </p>
               <p className="text-sm text-gray-700">
-                <span className="font-semibold">Area:</span>{" "}
-                {duty.area || "—"}
+                <span className="font-semibold">Area:</span> {duty.area || "—"}
               </p>
               <p className="text-sm text-gray-700">
                 <span className="font-semibold">Members:</span>{" "}
@@ -316,17 +316,17 @@ const AdminDashboard = () => {
               </p>
               <div className="flex gap-2">
                 <button
-                onClick={() => openEditModal(duty)}
-                className="mt-2 bg-yellow-500 text-white px-3 py-1 rounded hover:bg-yellow-600 transition"
-              >
-                Edit
-              </button>
-              <button
-                onClick={(e) => handleDelete(e, duty)}
-                className="mt-2 bg-red-500 text-white px-3 py-1 rounded hover:bg-yellow-600 transition"
-              >
-                Delete Duty
-              </button>
+                  onClick={() => openEditModal(duty)}
+                  className="px-3 py-1 mt-2 text-white transition bg-yellow-500 rounded hover:bg-yellow-600"
+                >
+                  Edit
+                </button>
+                <button
+                  onClick={(e) => handleDelete(e, duty)}
+                  className="px-3 py-1 mt-2 text-white transition bg-red-500 rounded hover:bg-yellow-600"
+                >
+                  Delete Duty
+                </button>
               </div>
             </div>
           ))
@@ -337,9 +337,9 @@ const AdminDashboard = () => {
 
       {/* Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-40 flex justify-center items-center z-50">
-          <div className="bg-white p-6 rounded-xl w-96 shadow-lg">
-            <h2 className="text-lg font-bold mb-4 text-green-700">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+          <div className="p-6 bg-white shadow-lg rounded-xl w-96">
+            <h2 className="mb-4 text-lg font-bold text-green-700">
               {editingDuty ? "Edit Duty" : "Add Duty"}
             </h2>
 
@@ -351,7 +351,7 @@ const AdminDashboard = () => {
                   name="groupId"
                   value={form.groupId}
                   onChange={handleChange}
-                  className="w-full border rounded p-2"
+                  className="w-full p-2 border rounded"
                 >
                   {groups.map((g) => (
                     <option key={g._id} value={g._id}>
@@ -369,7 +369,7 @@ const AdminDashboard = () => {
                 name="date"
                 value={form.date}
                 onChange={handleChange}
-                className="w-full border rounded p-2"
+                className="w-full p-2 border rounded"
               />
             </div>
 
@@ -380,7 +380,7 @@ const AdminDashboard = () => {
                 name="place"
                 value={form.place}
                 onChange={handleChange}
-                className="w-full border rounded p-2"
+                className="w-full p-2 border rounded"
               />
             </div>
 
@@ -391,7 +391,7 @@ const AdminDashboard = () => {
                 name="timeFrom"
                 value={form.timeFrom}
                 onChange={handleChange}
-                className="w-full border rounded p-2"
+                className="w-full p-2 border rounded"
               />
             </div>
 
@@ -402,7 +402,7 @@ const AdminDashboard = () => {
                 name="timeTo"
                 value={form.timeTo}
                 onChange={handleChange}
-                className="w-full border rounded p-2"
+                className="w-full p-2 border rounded"
               />
             </div>
 
@@ -415,7 +415,7 @@ const AdminDashboard = () => {
                 name="clinicalInstructor"
                 value={form.clinicalInstructor}
                 onChange={handleChange}
-                className="w-full border rounded p-2"
+                className="w-full p-2 border rounded"
               />
             </div>
 
@@ -426,20 +426,20 @@ const AdminDashboard = () => {
                 name="area"
                 value={form.area}
                 onChange={handleChange}
-                className="w-full border rounded p-2"
+                className="w-full p-2 border rounded"
               />
             </div>
 
-            <div className="flex justify-end space-x-2 mt-4">
+            <div className="flex justify-end mt-4 space-x-2">
               <button
                 onClick={() => setShowModal(false)}
-                className="px-4 py-2 rounded bg-gray-200 hover:bg-gray-300"
+                className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSave}
-                className="px-4 py-2 rounded bg-green-600 text-white hover:bg-green-700"
+                className="px-4 py-2 text-white bg-green-600 rounded hover:bg-green-700"
               >
                 {isLoading ? "Loading.." : "Save"}
               </button>

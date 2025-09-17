@@ -6,7 +6,7 @@
  */
 
 import React, { useEffect, useState } from "react";
-import api from "../api/api"; // axios instance
+// import api from "../api/api"; // axios instance
 import { toast } from "react-toastify";
 
 const Members = () => {
@@ -92,7 +92,7 @@ const Members = () => {
         {filtered.map((user) => (
           <div
             key={user._id}
-            className="p-4 bg-white rounded-lg shadow-md flex justify-between items-center"
+            className="flex items-center justify-between p-4 bg-white rounded-lg shadow-md"
           >
             <div>
               <p className="font-semibold">{user.name}</p>
@@ -100,19 +100,20 @@ const Members = () => {
                 {user.schoolId} • {user.username}
               </p>
               <p className="text-xs text-gray-400">
-                Role: {user.role} {user.group ? `• Group: ${user.group.name}` : ""}
+                Role: {user.role}{" "}
+                {user.group ? `• Group: ${user.group.name}` : ""}
               </p>
             </div>
             <div className="flex gap-2">
               <button
                 onClick={() => setEditingUser(user)}
-                className="px-3 py-1 text-sm bg-blue-500 text-white rounded-lg"
+                className="px-3 py-1 text-sm text-white bg-blue-500 rounded-lg"
               >
                 Edit
               </button>
               <button
                 onClick={() => setDeletingUser(user)}
-                className="px-3 py-1 text-sm bg-red-500 text-white rounded-lg"
+                className="px-3 py-1 text-sm text-white bg-red-500 rounded-lg"
               >
                 Delete
               </button>
@@ -123,11 +124,13 @@ const Members = () => {
 
       {/* Edit Modal */}
       {editingUser && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-          <div className="bg-white w-11/12 max-w-md p-6 rounded-lg">
-            <h2 className="text-lg font-bold mb-4">Edit User ({editingUser.schoolId})</h2>
+        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="w-11/12 max-w-md p-6 bg-white rounded-lg">
+            <h2 className="mb-4 text-lg font-bold">
+              Edit User ({editingUser.schoolId})
+            </h2>
 
-            <p className="mb-2 text-sm text-gray-400 px-1">School ID:</p>
+            <p className="px-1 mb-2 text-sm text-gray-400">School ID:</p>
             <input
               className="w-full p-2 mb-2 border rounded"
               placeholder="School ID"
@@ -136,7 +139,7 @@ const Members = () => {
                 setEditingUser({ ...editingUser, schoolId: e.target.value })
               }
             />
-            <p className="mb-2 text-sm text-gray-400 px-1">Username:</p>
+            <p className="px-1 mb-2 text-sm text-gray-400">Username:</p>
             <input
               className="w-full p-2 mb-2 border rounded"
               placeholder="Username"
@@ -145,7 +148,7 @@ const Members = () => {
                 setEditingUser({ ...editingUser, username: e.target.value })
               }
             />
-            <p className="mb-2 text-sm text-gray-400 px-1">Name:</p>
+            <p className="px-1 mb-2 text-sm text-gray-400">Name:</p>
             <input
               className="w-full p-2 mb-2 border rounded"
               placeholder="Name"
@@ -154,7 +157,7 @@ const Members = () => {
                 setEditingUser({ ...editingUser, name: e.target.value })
               }
             />
-            <p className="mb-2 text-sm text-gray-400 px-1">Section:</p>
+            <p className="px-1 mb-2 text-sm text-gray-400">Section:</p>
             <input
               className="w-full p-2 mb-2 border rounded"
               placeholder="Section"
@@ -163,7 +166,7 @@ const Members = () => {
                 setEditingUser({ ...editingUser, section: e.target.value })
               }
             />
-            <p className="mb-2 text-sm text-gray-400 px-1">Course:</p>
+            <p className="px-1 mb-2 text-sm text-gray-400">Course:</p>
             <input
               className="w-full p-2 mb-2 border rounded"
               placeholder="Course"
@@ -172,7 +175,7 @@ const Members = () => {
                 setEditingUser({ ...editingUser, course: e.target.value })
               }
             />
-            <p className="mb-2 text-sm text-gray-400 px-1">Department:</p>
+            <p className="px-1 mb-2 text-sm text-gray-400">Department:</p>
             <input
               className="w-full p-2 mb-2 border rounded"
               placeholder="Department"
@@ -182,7 +185,7 @@ const Members = () => {
               }
             />
 
-            <p className="mb-2 text-sm text-gray-400 px-1">Role:</p>
+            <p className="px-1 mb-2 text-sm text-gray-400">Role:</p>
             <select
               className="w-full p-2 mb-4 border rounded"
               value={editingUser.role}
@@ -202,7 +205,7 @@ const Members = () => {
                 Cancel
               </button>
               <button
-                className="px-4 py-2 bg-blue-600 text-white rounded"
+                className="px-4 py-2 text-white bg-blue-600 rounded"
                 onClick={() => handleUpdate(editingUser._id)}
               >
                 Save
@@ -214,9 +217,9 @@ const Members = () => {
 
       {/* Delete Confirmation Modal */}
       {deletingUser && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-          <div className="bg-white w-11/12 max-w-sm p-6 rounded-lg text-center">
-            <h2 className="text-lg font-bold mb-4">Delete User</h2>
+        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="w-11/12 max-w-sm p-6 text-center bg-white rounded-lg">
+            <h2 className="mb-4 text-lg font-bold">Delete User</h2>
             <p className="mb-6">
               Are you sure you want to delete{" "}
               <span className="font-semibold">{deletingUser.name}</span>?
@@ -229,7 +232,7 @@ const Members = () => {
                 Cancel
               </button>
               <button
-                className="px-4 py-2 bg-red-600 text-white rounded"
+                className="px-4 py-2 text-white bg-red-600 rounded"
                 onClick={() => handleDelete(deletingUser._id)}
               >
                 Delete

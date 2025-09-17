@@ -10,7 +10,7 @@ import { Scanner } from "@yudiel/react-qr-scanner";
 import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { useAuth } from "../context/AuthContext";
-import api from "../api/api";
+// import api from "../api/api";
 
 const Attendance = () => {
   const { user, token } = useAuth();

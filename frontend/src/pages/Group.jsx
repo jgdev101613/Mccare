@@ -6,7 +6,7 @@
  */
 
 import React, { useEffect, useState } from "react";
-import api from "../api/api"; // axios instance
+// import api from "../api/api"; // axios instance
 import { toast } from "react-toastify";
 
 import { useCallback } from "react";
@@ -192,13 +192,13 @@ const Group = () => {
       <input
         type="text"
         placeholder="Search groups..."
-        className="w-full p-2 border rounded mb-4"
+        className="w-full p-2 mb-4 border rounded"
         onChange={(e) => debouncedGroupSearch(e.target.value)}
       />
       {/* Add Group Button */}
       <button
         onClick={() => setAddGroupModal(true)}
-        className="w-full bg-blue-600 text-white py-2 rounded-lg mb-4"
+        className="w-full py-2 mb-4 text-white bg-blue-600 rounded-lg"
       >
         + Create Group
       </button>
@@ -211,13 +211,13 @@ const Group = () => {
           {groups.map((g) => (
             <div
               key={g._id}
-              className="p-4 bg-white shadow-md rounded-lg space-y-2"
+              className="p-4 space-y-2 bg-white rounded-lg shadow-md"
             >
-              <div className="flex justify-between items-center">
-                <h2 className="font-bold text-lg">{g.name}</h2>
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-bold">{g.name}</h2>
                 <button
                   onClick={() => handleDeleteGroup(g._id)}
-                  className="text-red-500 text-sm"
+                  className="text-sm text-red-500"
                 >
                   Delete
                 </button>
@@ -253,13 +253,13 @@ const Group = () => {
                   Edit Name
                 </button>
                 <button
-                  className="px-3 py-1 bg-green-500 text-white rounded"
+                  className="px-3 py-1 text-white bg-green-500 rounded"
                   onClick={() => setAddMembers(g)}
                 >
                   Add Members
                 </button>
                 <button
-                  className="px-3 py-1 bg-orange-500 text-white rounded"
+                  className="px-3 py-1 text-white bg-orange-500 rounded"
                   onClick={() => {
                     setManageMembers(g);
                   }}
@@ -274,11 +274,11 @@ const Group = () => {
 
       {/* --- Add Group Modal --- */}
       {addGroupModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-          <div className="bg-white w-11/12 max-w-md p-6 rounded-lg">
-            <h2 className="text-lg font-bold mb-4">Create Group</h2>
+        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="w-11/12 max-w-md p-6 bg-white rounded-lg">
+            <h2 className="mb-4 text-lg font-bold">Create Group</h2>
             <input
-              className="w-full p-2 border rounded mb-3"
+              className="w-full p-2 mb-3 border rounded"
               placeholder="Group Name"
               value={groupName}
               onChange={(e) => setGroupName(e.target.value)}
@@ -286,16 +286,16 @@ const Group = () => {
 
             {/* Search and select members */}
             <input
-              className="w-full p-2 border rounded mb-2"
+              className="w-full p-2 mb-2 border rounded"
               placeholder="Search members by School ID or Name"
               value={memberSearch}
               onChange={(e) => handleSearchMembers(e.target.value)}
             />
-            <div className="max-h-32 overflow-y-auto mb-2">
+            <div className="mb-2 overflow-y-auto max-h-32">
               {searchResults.map((u) => (
                 <div
                   key={u._id}
-                  className="flex justify-between items-center p-1 border-b"
+                  className="flex items-center justify-between p-1 border-b"
                 >
                   <span>
                     {u.name} ({u.schoolId})
@@ -304,9 +304,7 @@ const Group = () => {
                     className="text-sm text-blue-600"
                     onClick={() =>
                       setSelectedMembers((prev) =>
-                        prev.includes(u.schoolId)
-                          ? prev
-                          : [...prev, u.schoolId]
+                        prev.includes(u.schoolId) ? prev : [...prev, u.schoolId]
                       )
                     }
                   >
@@ -320,7 +318,7 @@ const Group = () => {
               {selectedMembers.map((id) => (
                 <span
                   key={id}
-                  className="px-2 py-1 bg-blue-100 text-blue-700 rounded"
+                  className="px-2 py-1 text-blue-700 bg-blue-100 rounded"
                 >
                   {id}
                 </span>
@@ -335,7 +333,7 @@ const Group = () => {
                 Cancel
               </button>
               <button
-                className="px-4 py-2 bg-blue-600 text-white rounded"
+                className="px-4 py-2 text-white bg-blue-600 rounded"
                 onClick={handleCreateGroup}
               >
                 Save
@@ -347,11 +345,11 @@ const Group = () => {
 
       {/* --- Edit Group Name Modal --- */}
       {editGroup && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-          <div className="bg-white w-11/12 max-w-md p-6 rounded-lg">
-            <h2 className="text-lg font-bold mb-4">Edit Group Name</h2>
+        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="w-11/12 max-w-md p-6 bg-white rounded-lg">
+            <h2 className="mb-4 text-lg font-bold">Edit Group Name</h2>
             <input
-              className="w-full p-2 border rounded mb-4"
+              className="w-full p-2 mb-4 border rounded"
               value={groupName}
               onChange={(e) => setGroupName(e.target.value)}
             />
@@ -363,7 +361,7 @@ const Group = () => {
                 Cancel
               </button>
               <button
-                className="px-4 py-2 bg-blue-600 text-white rounded"
+                className="px-4 py-2 text-white bg-blue-600 rounded"
                 onClick={handleUpdateName}
               >
                 Save
@@ -375,22 +373,22 @@ const Group = () => {
 
       {/* --- Add Members Modal --- */}
       {addMembers && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-          <div className="bg-white w-11/12 max-w-md p-6 rounded-lg">
-            <h2 className="text-lg font-bold mb-4">
+        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="w-11/12 max-w-md p-6 bg-white rounded-lg">
+            <h2 className="mb-4 text-lg font-bold">
               Add Members to {addMembers.name}
             </h2>
             <input
-              className="w-full p-2 border rounded mb-2"
+              className="w-full p-2 mb-2 border rounded"
               placeholder="Search members"
               value={memberSearch}
               onChange={(e) => handleSearchMembers(e.target.value)}
             />
-            <div className="max-h-32 overflow-y-auto mb-2">
+            <div className="mb-2 overflow-y-auto max-h-32">
               {searchResults.map((u) => (
                 <div
                   key={u._id}
-                  className="flex justify-between items-center p-1 border-b"
+                  className="flex items-center justify-between p-1 border-b"
                 >
                   <span>
                     {u.name} ({u.schoolId})
@@ -399,9 +397,7 @@ const Group = () => {
                     className="text-sm text-blue-600"
                     onClick={() =>
                       setSelectedMembers((prev) =>
-                        prev.includes(u.schoolId)
-                          ? prev
-                          : [...prev, u.schoolId]
+                        prev.includes(u.schoolId) ? prev : [...prev, u.schoolId]
                       )
                     }
                   >
@@ -415,7 +411,7 @@ const Group = () => {
               {selectedMembers.map((id) => (
                 <span
                   key={id}
-                  className="px-2 py-1 bg-blue-100 text-blue-700 rounded"
+                  className="px-2 py-1 text-blue-700 bg-blue-100 rounded"
                 >
                   {id}
                 </span>
@@ -427,15 +423,15 @@ const Group = () => {
                 className="px-4 py-2 bg-gray-300 rounded"
                 onClick={() => {
                   setAddMembers(null);
-                  setMemberSearch("");     // reset search
-                  setSearchResults([]);    // reset results
-                  setSelectedMembers([]);  // reset selected members
+                  setMemberSearch(""); // reset search
+                  setSearchResults([]); // reset results
+                  setSelectedMembers([]); // reset selected members
                 }}
               >
                 Cancel
               </button>
               <button
-                className="px-4 py-2 bg-green-600 text-white rounded"
+                className="px-4 py-2 text-white bg-green-600 rounded"
                 onClick={handleAddMembers}
               >
                 Save
@@ -447,22 +443,22 @@ const Group = () => {
 
       {/* --- Manage Members Modal --- */}
       {manageMembers && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-          <div className="bg-white w-11/12 max-w-md p-6 rounded-lg">
-            <h2 className="text-lg font-bold mb-4">
+        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="w-11/12 max-w-md p-6 bg-white rounded-lg">
+            <h2 className="mb-4 text-lg font-bold">
               Manage Members in {manageMembers.name}
             </h2>
-            <div className="space-y-2 max-h-64 overflow-y-auto">
+            <div className="space-y-2 overflow-y-auto max-h-64">
               {manageMembers.members.map((m) => (
                 <div
                   key={m._id}
-                  className="flex justify-between items-center border-b pb-1"
+                  className="flex items-center justify-between pb-1 border-b"
                 >
                   <span>
                     {m.username} ({m.schoolId})
                   </span>
                   <button
-                    className="text-red-500 text-sm"
+                    className="text-sm text-red-500"
                     onClick={() => handleRemoveMember(manageMembers._id, m._id)}
                   >
                     Remove
@@ -484,9 +480,9 @@ const Group = () => {
 
       {/* --- Confirmation Modal --- */}
       {confirmAction && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-          <div className="bg-white w-11/12 max-w-sm p-6 rounded-lg">
-            <p className="mb-6 text-center text-lg">{confirmAction.message}</p>
+        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="w-11/12 max-w-sm p-6 bg-white rounded-lg">
+            <p className="mb-6 text-lg text-center">{confirmAction.message}</p>
             <div className="flex justify-center space-x-3">
               <button
                 className="px-4 py-2 bg-gray-300 rounded"
@@ -495,7 +491,7 @@ const Group = () => {
                 Cancel
               </button>
               <button
-                className="px-4 py-2 bg-red-600 text-white rounded"
+                className="px-4 py-2 text-white bg-red-600 rounded"
                 onClick={() => {
                   confirmAction.onConfirm();
                   setConfirmAction(null);

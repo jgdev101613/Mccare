@@ -6,18 +6,48 @@
  */
 
 import express from "express";
+
+// Models
+import Attendance from "../models/Attendance.js";
 import Group from "../models/Group.js";
 import User from "../models/User.js";
+
+// Authentication
 import protectRoutes from "../middleware/auth.middleware.js";
 import adminOnly from "../middleware/auth.admin.js";
 
-const groupRoutes = express.Router();
+const adminRoutes = express.Router();
 
-/**
- * Create a Group
- * Admin creates group with name + members
- */
-groupRoutes.post("/", protectRoutes, adminOnly, async (req, res) => {
+// ********** STUDENTS ********** //
+/** Fetch All Students and their information **/
+adminRoutes.get(
+  "/students/fetchAllStudents",
+  protectRoutes,
+  adminOnly,
+  async (req, res) => {
+    try {
+      const users = await User.find({ role: "user" })
+        .select("-password")
+        .populate("group", "name") // optional: show group name
+        .lean();
+
+      res.status(200).json({
+        success: true,
+        users,
+      });
+    } catch (error) {
+      console.error("Error in GET /members:", error.message);
+      res.status(500).json({
+        success: false,
+        message: "Server error.",
+      });
+    }
+  }
+);
+
+// ********** GROUP ********** //
+/** Create a Group: Admin creates a group with name and members **/
+adminRoutes.post("/group", protectRoutes, adminOnly, async (req, res) => {
   try {
     const { name, members } = req.body; // members = array of schoolIds
 
@@ -48,7 +78,9 @@ groupRoutes.post("/", protectRoutes, adminOnly, async (req, res) => {
     }
 
     // Check if any of these users already belong to another group
-    const conflict = await Group.findOne({ members: { $in: users.map(u => u._id) } });
+    const conflict = await Group.findOne({
+      members: { $in: users.map((u) => u._id) },
+    });
     if (conflict) {
       return res.status(400).json({
         success: false,
@@ -59,14 +91,14 @@ groupRoutes.post("/", protectRoutes, adminOnly, async (req, res) => {
     // Create group with ObjectIds of users
     const newGroup = new Group({
       name: name.trim(),
-      members: users.map(u => u._id),
+      members: users.map((u) => u._id),
     });
 
     await newGroup.save();
 
     // Update each user with group reference
     await User.updateMany(
-      { _id: { $in: users.map(u => u._id) } },
+      { _id: { $in: users.map((u) => u._id) } },
       { $set: { group: newGroup._id } }
     );
 
@@ -84,29 +116,30 @@ groupRoutes.post("/", protectRoutes, adminOnly, async (req, res) => {
   }
 });
 
-/**
- * Get All Groups
- */
-groupRoutes.get("/", protectRoutes, adminOnly, async (req, res) => {
-  try {
-    const groups = await Group.find()
-      .sort({ createdAt: -1 })
-      .populate("members", "username email schoolId");
+/** Fetch All Groups **/
+adminRoutes.get(
+  "/group/fetchAllgroups",
+  protectRoutes,
+  adminOnly,
+  async (req, res) => {
+    try {
+      const groups = await Group.find()
+        .sort({ createdAt: -1 })
+        .populate("members", "username email schoolId");
 
-    res.json({ success: true, groups });
-  } catch (error) {
-    console.error("Error in GET /groups:", error);
-    return res.status(500).json({
-      success: false,
-      message: `Internal Server Error: ${error.message}`,
-    });
+      res.json({ success: true, groups });
+    } catch (error) {
+      console.error("Error in GET /groups:", error);
+      return res.status(500).json({
+        success: false,
+        message: `Internal Server Error: ${error.message}`,
+      });
+    }
   }
-});
+);
 
-/**
- * Get All Groups (with optional search)
- */
-groupRoutes.get("/groupid", protectRoutes, adminOnly, async (req, res) => {
+/** Search And Fetch Groups **/
+adminRoutes.get("/group/", protectRoutes, adminOnly, async (req, res) => {
   try {
     const { search } = req.query;
 
@@ -130,77 +163,83 @@ groupRoutes.get("/groupid", protectRoutes, adminOnly, async (req, res) => {
   }
 });
 
+/** Add Members To A Group **/
+adminRoutes.post(
+  "/group/addMembers/:groupId",
+  protectRoutes,
+  adminOnly,
+  async (req, res) => {
+    try {
+      let { schoolId } = req.body;
+      const { groupId } = req.params;
 
-/**
- * Add Members To A Group
- */
-groupRoutes.post("/:groupId/members", protectRoutes, adminOnly, async (req, res) => {
-  try {
-    let { schoolId } = req.body;
-    const { groupId } = req.params;
-
-    if (!schoolId) {
-      return res.status(400).json({ success: false, message: "School ID(s) are required." });
-    }
-
-    // Normalize into array
-    const schoolIds = Array.isArray(schoolId) ? schoolId : [schoolId];
-
-    // Find target group
-    const group = await Group.findById(groupId);
-    if (!group) {
-      return res.status(404).json({ success: false, message: "Group not found." });
-    }
-
-    const results = {
-      added: [],
-      skipped: [],
-      notFound: [],
-    };
-
-    for (const id of schoolIds) {
-      // Validate user exists (by schoolId)
-      const user = await User.findOne({ schoolId: id });
-      if (!user) {
-        results.notFound.push(id);
-        continue;
+      if (!schoolId) {
+        return res
+          .status(400)
+          .json({ success: false, message: "School ID(s) are required." });
       }
 
-      // Ensure user isn't already in ANY group
-      const conflict = await Group.findOne({ members: user._id });
-      if (conflict) {
-        results.skipped.push({ schoolId: id, group: conflict.name });
-        continue;
+      // Normalize into array
+      const schoolIds = Array.isArray(schoolId) ? schoolId : [schoolId];
+
+      // Find target group
+      const group = await Group.findById(groupId);
+      if (!group) {
+        return res
+          .status(404)
+          .json({ success: false, message: "Group not found." });
       }
 
-      // Add user to group
-      group.members.push(user._id);
-      await group.save();
+      const results = {
+        added: [],
+        skipped: [],
+        notFound: [],
+      };
 
-      // Update user with group reference
-      user.group = group._id;
-      await user.save();
+      for (const id of schoolIds) {
+        // Validate user exists (by schoolId)
+        const user = await User.findOne({ schoolId: id });
+        if (!user) {
+          results.notFound.push(id);
+          continue;
+        }
 
-      results.added.push({ schoolId: id, name: user.name || user.username });
+        // Ensure user isn't already in ANY group
+        const conflict = await Group.findOne({ members: user._id });
+        if (conflict) {
+          results.skipped.push({ schoolId: id, group: conflict.name });
+          continue;
+        }
+
+        // Add user to group
+        group.members.push(user._id);
+        await group.save();
+
+        // Update user with group reference
+        user.group = group._id;
+        await user.save();
+
+        results.added.push({ schoolId: id, name: user.name || user.username });
+      }
+
+      res.status(200).json({
+        success: true,
+        message: "Processed member(s).",
+        results,
+        group,
+      });
+    } catch (error) {
+      console.error("Error adding members:", error);
+      res
+        .status(500)
+        .json({ success: false, message: `Server error: ${error.message}` });
     }
-
-    res.status(200).json({
-      success: true,
-      message: "Processed member(s).",
-      results,
-      group,
-    });
-  } catch (error) {
-    console.error("Error adding members:", error);
-    res.status(500).json({ success: false, message: `Server error: ${error.message}` });
   }
-});
+);
 
-/**
- * Remove a single member from a group
- */
-groupRoutes.delete(
-  "/:groupId/members/:userId",
+/** Remove a single member from a group **/
+adminRoutes.delete(
+  "group/:groupId/members/:userId",
   protectRoutes,
   adminOnly,
   async (req, res) => {
@@ -246,10 +285,8 @@ groupRoutes.delete(
   }
 );
 
-/**
- * Update Group Name
- */
-groupRoutes.put("/:id", protectRoutes, adminOnly, async (req, res) => {
+/** Update Group Name **/
+adminRoutes.put("group/:id", protectRoutes, adminOnly, async (req, res) => {
   try {
     const { id } = req.params;
     const { name } = req.body;
@@ -264,11 +301,16 @@ groupRoutes.put("/:id", protectRoutes, adminOnly, async (req, res) => {
     // Check if group exists
     const group = await Group.findById(id);
     if (!group) {
-      return res.status(404).json({ success: false, message: "Group not found." });
+      return res
+        .status(404)
+        .json({ success: false, message: "Group not found." });
     }
 
     // Ensure the new name is unique
-    const existingGroup = await Group.findOne({ name: name.trim(), _id: { $ne: id } });
+    const existingGroup = await Group.findOne({
+      name: name.trim(),
+      _id: { $ne: id },
+    });
     if (existingGroup) {
       return res.status(400).json({
         success: false,
@@ -293,11 +335,8 @@ groupRoutes.put("/:id", protectRoutes, adminOnly, async (req, res) => {
   }
 });
 
-
-/**
- * Delete an entire Group
- */
-groupRoutes.delete("/:id", protectRoutes, adminOnly, async (req, res) => {
+/** Delete an entire Group **/
+adminRoutes.delete("group/:id", protectRoutes, adminOnly, async (req, res) => {
   try {
     const group = await Group.findById(req.params.id);
 
@@ -320,4 +359,4 @@ groupRoutes.delete("/:id", protectRoutes, adminOnly, async (req, res) => {
   }
 });
 
-export default groupRoutes;
+export default adminRoutes;

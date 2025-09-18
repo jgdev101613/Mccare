@@ -5,11 +5,23 @@
  * Full license terms available in LICENSE.md
  */
 
-import React, { useEffect, useState } from "react";
-// import api from "../api/api"; // axios instance
-import { toast } from "react-toastify";
-
+import { useEffect, useState } from "react";
 import { useCallback } from "react";
+
+// Toast
+import { showSuccessToast, showErrorToast } from "../utils/toast";
+import {
+  addMembersToGroup,
+  adminFetchAllGroups,
+  createGroup,
+  deleteGroup,
+  removeMemberToGroup,
+  searchGroup,
+  searchStudent,
+  updateGroupName,
+} from "../api";
+
+// Endpoints
 
 function debounce(fn, delay) {
   let timeout;
@@ -48,13 +60,13 @@ const Group = () => {
         return;
       }
       try {
-        const res = await api.get(`/group/groupid?search=${query}`);
+        const res = await searchGroup(query);
         if (res.data.success) {
           setGroups(res.data.groups);
         }
       } catch (err) {
         console.error(err);
-        toast.error("Failed to search groups");
+        showErrorToast("Failed to search groups");
       }
     }, 200),
     []
@@ -63,31 +75,38 @@ const Group = () => {
   const fetchGroups = async () => {
     setLoading(true);
     try {
-      const res = await api.get("/group");
-      if (res.data.success) setGroups(res.data.groups);
+      const res = await adminFetchAllGroups();
+      if (res.data.success) {
+        console.log("Groups fetched successfully");
+        setGroups(res.data.groups);
+      } else {
+        showErrorToast(res.data.message);
+      }
     } catch (err) {
-      console.error(err);
-      toast.error("Failed to fetch groups");
+      showErrorToast(err.response?.data.message);
+      console.error("Fetch error:", err.response?.data || err.message);
     }
     setLoading(false);
   };
 
   const handleCreateGroup = async () => {
     try {
-      const res = await api.post("/group", {
+      const res = await createGroup({
         name: groupName,
         members: selectedMembers,
       });
       if (res.data.success) {
-        toast.success("Group created!");
+        showSuccessToast("Group created!");
         setAddGroupModal(false);
         setGroupName("");
         setSelectedMembers([]);
         fetchGroups();
+      } else {
+        showErrorToast(res.data.message);
       }
     } catch (err) {
-      console.error(err);
-      toast.error(err.response?.data?.message || "Error creating group");
+      showErrorToast(err.response?.data.message);
+      console.error("Create error:", err.response?.data || err.message);
     }
   };
 
@@ -96,14 +115,16 @@ const Group = () => {
       message: "Are you sure you want to delete this group?",
       onConfirm: async () => {
         try {
-          const res = await api.delete(`/group/${id}`);
+          const res = await deleteGroup(id);
           if (res.data.success) {
-            toast.success("Group deleted");
+            showSuccessToast("Group deleted");
             fetchGroups();
+          } else {
+            showErrorToast(res.data.message);
           }
         } catch (err) {
-          console.error(err);
-          toast.error("Error deleting group");
+          showErrorToast(err.response?.data.message);
+          console.error("Create error:", err.response?.data || err.message);
         }
       },
     });
@@ -111,32 +132,36 @@ const Group = () => {
 
   const handleUpdateName = async () => {
     try {
-      const res = await api.put(`/group/${editGroup._id}`, { name: groupName });
+      const res = await updateGroupName(editGroup._id, { name: groupName });
       if (res.data.success) {
-        toast.success("Group name updated");
+        showSuccessToast("Group name updated");
         setEditGroup(null);
         fetchGroups();
+      } else {
+        showErrorToast(res.data.message);
       }
     } catch (err) {
-      console.error(err);
-      toast.error("Error updating group name");
+      showErrorToast(err.response?.data.message);
+      console.error("Create error:", err.response?.data || err.message);
     }
   };
 
   const handleAddMembers = async () => {
     try {
-      const res = await api.post(`/group/${addMembers._id}/members`, {
+      const res = await addMembersToGroup(addMembers._id, {
         schoolId: selectedMembers,
       });
       if (res.data.success) {
-        toast.success("Members added!");
+        showSuccessToast("Member/s added");
         setAddMembers(null);
         setSelectedMembers([]);
         fetchGroups();
+      } else {
+        showErrorToast(res.data.message);
       }
     } catch (err) {
-      console.error(err);
-      toast.error("Error adding members");
+      showErrorToast(err.response?.data.message);
+      console.error("Create error:", err.response?.data || err.message);
     }
   };
 
@@ -145,10 +170,9 @@ const Group = () => {
       message: "Are you sure you want to remove this member?",
       onConfirm: async () => {
         try {
-          const res = await api.delete(`/group/${groupId}/members/${userId}`);
+          const res = await removeMemberToGroup(groupId, userId);
           if (res.data.success) {
-            toast.success("Member removed");
-
+            showSuccessToast("Member removed");
             // ✅ Update local state so modal reflects change immediately
             setManageMembers((prev) => ({
               ...prev,
@@ -156,10 +180,12 @@ const Group = () => {
             }));
 
             fetchGroups(); // keep global list in sync
+          } else {
+            showErrorToast(res.data.message);
           }
         } catch (err) {
-          console.error(err);
-          toast.error("Error removing member");
+          showErrorToast(err.response?.data.message);
+          console.error("Create error:", err.response?.data || err.message);
         }
       },
     });
@@ -174,13 +200,13 @@ const Group = () => {
         return;
       }
       try {
-        const res = await api.get(`/auth/members/user?search=${query}`);
+        const res = await searchStudent(query);
         if (res.data.success) {
           setSearchResults(res.data.users);
         }
       } catch (err) {
         console.error(err);
-        toast.error("Failed to search members");
+        showErrorToast("Failed to search members");
       }
     }, 100),
     []

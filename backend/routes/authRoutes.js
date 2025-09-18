@@ -464,127 +464,6 @@ authRoutes.put(
 );
 
 /**
- * Edit User Information
- */
-authRoutes.put(
-  "/update/:id/information",
-  protectRoutes,
-  selfOrAdmin,
-  async (req, res) => {
-    try {
-      const { id } = req.params;
-
-      // Extract fields
-      const { name, section, course, department } = req.body;
-
-      // Build update object dynamically, only if field is not blank
-      const updateData = {};
-      if (name && name.trim() !== "") updateData.name = name;
-      if (section && section.trim() !== "") updateData.section = section;
-      if (course && course.trim() !== "") updateData.course = course;
-      if (department && department.trim() !== "")
-        updateData.department = department;
-
-      // Update user
-      const updatedUser = await User.findByIdAndUpdate(
-        id,
-        { $set: updateData },
-        { new: true, runValidators: true }
-      );
-
-      if (!updatedUser) {
-        return res
-          .status(404)
-          .json({ success: false, message: "User not found." });
-      }
-
-      res.json({
-        success: true,
-        message: "User updated successfully.",
-        user: updatedUser,
-      });
-    } catch (error) {
-      console.error("Update error:", error.message);
-      res.status(500).json({ success: false, message: "Server error." });
-    }
-  }
-);
-
-/**
- * Admin: Edit User Information
- */
-authRoutes.put("/update/:id", protectRoutes, adminOnly, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { schoolId, username, name, section, course, department, role } =
-      req.body;
-
-    // Build update object dynamically (only include non-empty fields)
-    const updateData = {};
-    if (schoolId && schoolId.trim() !== "")
-      updateData.schoolId = schoolId.trim();
-    if (username && username.trim() !== "")
-      updateData.username = username.trim();
-    if (name && name.trim() !== "") updateData.name = name.trim();
-    if (section && section.trim() !== "") updateData.section = section.trim();
-    if (course && course.trim() !== "") updateData.course = course.trim();
-    if (department && department.trim() !== "")
-      updateData.department = department.trim();
-    if (role && ["user", "admin"].includes(role)) updateData.role = role;
-
-    const updatedUser = await User.findByIdAndUpdate(
-      id,
-      { $set: updateData },
-      { new: true, runValidators: true }
-    ).select("-password");
-
-    if (!updatedUser) {
-      return res
-        .status(404)
-        .json({ success: false, message: "User not found." });
-    }
-
-    res.json({
-      success: true,
-      message: "User updated successfully.",
-      user: updatedUser,
-    });
-  } catch (error) {
-    console.error("❌ Update user error:", error.message);
-    res.status(500).json({ success: false, message: "Server error." });
-  }
-});
-
-/**
- * Admin: Delete a User
- */
-authRoutes.delete("/delete/:id", protectRoutes, adminOnly, async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    const deletedUser = await User.findByIdAndDelete(id);
-
-    if (!deletedUser) {
-      return res.status(404).json({
-        success: false,
-        message: "User not found.",
-      });
-    }
-
-    res.status(200).json({
-      success: true,
-      message: "User deleted successfully.",
-    });
-  } catch (error) {
-    console.error("Error in DELETE /delete/:id:", error.message);
-    res.status(500).json({
-      success: false,
-      message: "Server error.",
-    });
-  }
-});
-
-/**
  * Get All Members / Users with optional search
  */
 authRoutes.get("/members/user", protectRoutes, adminOnly, async (req, res) => {
@@ -595,7 +474,12 @@ authRoutes.get("/members/user", protectRoutes, adminOnly, async (req, res) => {
     if (search && search.trim() !== "") {
       const regex = new RegExp(search, "i");
       query = {
-        $or: [{ username: regex }, { email: regex }, { schoolId: regex }],
+        $or: [
+          { username: regex },
+          { email: regex },
+          { schoolId: regex },
+          { name: regex },
+        ],
       };
     }
 

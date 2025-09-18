@@ -12,7 +12,13 @@ import { useDebounce } from "../hooks/useDebounce";
 
 // Toast
 import { showSuccessToast, showErrorToast } from "../utils/toast";
-import { adminfetchAllStudents } from "../api";
+
+// Endpoints
+import {
+  adminfetchAllStudents,
+  deleteStudent,
+  updateStudentInformation,
+} from "../api";
 
 const Members = () => {
   const [members, setMembers] = useState([]);
@@ -65,30 +71,34 @@ const Members = () => {
   // update user
   const handleUpdate = async (id) => {
     try {
-      const res = await api.put(`/auth/update/${id}`, editingUser);
+      const res = await updateStudentInformation(id, editingUser);
       if (res.data.success) {
-        toast.success("User updated successfully!");
+        showSuccessToast("User updated successfully!");
         setEditingUser(null);
         fetchMembers();
+      } else {
+        showErrorToast(res.data.message);
       }
-    } catch (error) {
-      console.error("Update failed:", error);
-      toast.error("Failed to update user.");
+    } catch (err) {
+      showErrorToast(err.response?.data.message);
+      console.error("Update error:", err.response?.data || err.message);
     }
   };
 
   // delete user
   const handleDelete = async (id) => {
     try {
-      const res = await api.delete(`/auth/delete/${id}`);
+      const res = await deleteStudent(id);
       if (res.data.success) {
-        toast.success("User deleted successfully!");
+        showSuccessToast("User deleted successfully!");
         setDeletingUser(null);
         fetchMembers();
+      } else {
+        showErrorToast(res.data.message);
       }
-    } catch (error) {
-      console.error("Delete failed:", error);
-      toast.error("Failed to delete user.");
+    } catch (err) {
+      showErrorToast(err.response?.data.message);
+      console.error("Delete error:", err.response?.data || err.message);
     }
   };
 
@@ -122,6 +132,7 @@ const Members = () => {
                 <p className="text-sm text-gray-500">
                   {user.schoolId} • {user.username}
                 </p>
+                <p className="text-xs text-gray-400">Email: {user.email}</p>
                 <p className="text-xs text-gray-400">
                   Role: {user.role === "user" ? "Student" : user.role}{" "}
                   {user.group ? `• Group: ${user.group.name}` : ""}

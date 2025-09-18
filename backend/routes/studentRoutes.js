@@ -121,4 +121,51 @@ studentRoutes.get(
 );
 // ********** END: DUTIES ENDPOINTS ********** //
 
+// ********** START: UPDATE USER ENDPOINTS ********** //
+/** Edit User Information **/
+studentRoutes.put(
+  "/update/:id/information",
+  protectRoutes,
+  selfOrAdmin,
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      // Extract fields
+      const { name, section, course, department } = req.body;
+
+      // Build update object dynamically, only if field is not blank
+      const updateData = {};
+      if (name && name.trim() !== "") updateData.name = name;
+      if (section && section.trim() !== "") updateData.section = section;
+      if (course && course.trim() !== "") updateData.course = course;
+      if (department && department.trim() !== "")
+        updateData.department = department;
+
+      // Update user
+      const updatedUser = await User.findByIdAndUpdate(
+        id,
+        { $set: updateData },
+        { new: true, runValidators: true }
+      );
+
+      if (!updatedUser) {
+        return res
+          .status(404)
+          .json({ success: false, message: "User not found." });
+      }
+
+      res.json({
+        success: true,
+        message: "User updated successfully.",
+        user: updatedUser,
+      });
+    } catch (error) {
+      console.error("Update error:", error.message);
+      res.status(500).json({ success: false, message: "Server error." });
+    }
+  }
+);
+// ********** END: UPDATE USER ENDPOINTS ********** //
+
 export default studentRoutes;

@@ -14,12 +14,32 @@ export const registerUser = (data) =>
   axiosWrapper.post("/api/auth/register", data);
 
 /** ADMIN ENDPOINTS **/
+export const searchStudent = (query) =>
+  axiosWrapper.get(`/api/auth/members/user?search=${query}`);
 export const adminFetchAllStudentsDuties = () =>
   axiosWrapper.get(`/api/admin/duty/fetchAllDuties`);
 export const adminFetchAllGroups = () =>
   axiosWrapper.get(`api/admin/group/fetchAllgroups`);
+export const searchGroup = (query) =>
+  axiosWrapper.get(`api/admin/group/?search=${query}`);
+export const createGroup = (data) =>
+  axiosWrapper.put(`api/admin/group/create`, data);
+export const updateGroupName = (id, data) =>
+  axiosWrapper.put(`api/admin/group/update/${id}`, data);
+export const addMembersToGroup = (id, data) =>
+  axiosWrapper.post(`api/admin/group/addMembers/${id}`, data);
+export const removeMemberToGroup = (groupId, userId) =>
+  axiosWrapper.delete(`api/admin/group/${groupId}/members/${userId}`);
+export const deleteGroup = (id) =>
+  axiosWrapper.delete(`api/admin/group/delete/${id}`);
 export const adminfetchAllStudents = () =>
   axiosWrapper.get(`api/admin/students/fetchAllStudents`);
+export const updateStudentInformation = (id, data) =>
+  axiosWrapper.put(`api/admin/students/update/${id}`, data);
+export const deleteStudent = (id) =>
+  axiosWrapper.delete(`api/admin/students/delete/${id}`);
+export const markAttendance = (id) =>
+  axiosWrapper.get(`api/admin/attendance/mark/${id}`);
 
 /** ADMIN/USER ENDPOINTS **/
 export const changePassword = (data, id) =>
@@ -41,4 +61,4 @@ export const fetchUserDuties = (id) =>
 export const fetchUserAttendance = (schoolId) =>
   axiosWrapper.get(`/api/student/attendance/fetchAttendance/${schoolId}`);
 export const updateUserInformation = (id, data) =>
-  axiosWrapper.put(`/api/auth/update/${id}/information`, data);
+  axiosWrapper.put(`/api/student/update/${id}/information`, data);

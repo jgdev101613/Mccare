@@ -52,6 +52,90 @@ adminRoutes.get(
   }
 );
 
+/** Edit Student Information **/
+adminRoutes.put(
+  "/students/update/:id",
+  protectRoutes,
+  adminOnly,
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { schoolId, username, name, section, course, department, role } =
+        req.body;
+
+      // Build update object dynamically (only include non-empty fields)
+      const updateData = {};
+      if (schoolId && schoolId.trim() !== "")
+        updateData.schoolId = schoolId.trim();
+      if (username && username.trim() !== "")
+        updateData.username = username.trim();
+      if (name && name.trim() !== "") updateData.name = name.trim();
+      if (section && section.trim() !== "") updateData.section = section.trim();
+      if (course && course.trim() !== "") updateData.course = course.trim();
+      if (department && department.trim() !== "")
+        updateData.department = department.trim();
+      if (role && ["user", "admin"].includes(role)) updateData.role = role;
+
+      const updatedUser = await User.findByIdAndUpdate(
+        id,
+        { $set: updateData },
+        { new: true, runValidators: true }
+      ).select("-password");
+
+      if (!updatedUser) {
+        return res
+          .status(404)
+          .json({ success: false, message: "User not found." });
+      }
+
+      res.json({
+        success: true,
+        message: "User updated successfully.",
+        user: updatedUser,
+      });
+    } catch (error) {
+      console.error("❌ Update user error:", error.message);
+      res.status(500).json({ success: false, message: "Server error." });
+    }
+  }
+);
+
+/** Delete A Student **/
+
+/**
+ * Admin: Delete a User
+ */
+adminRoutes.delete(
+  "/students/delete/:id",
+  protectRoutes,
+  adminOnly,
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      const deletedUser = await User.findByIdAndDelete(id);
+
+      if (!deletedUser) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found.",
+        });
+      }
+
+      res.status(200).json({
+        success: true,
+        message: "User deleted successfully.",
+      });
+    } catch (error) {
+      console.error("Error in DELETE /delete/:id:", error.message);
+      res.status(500).json({
+        success: false,
+        message: "Server error.",
+      });
+    }
+  }
+);
+
 // ********** END: STUDENTS ENDPOINTS ********** //
 
 // ********** START: DUTIES ENDPOINTs ********** //
@@ -270,74 +354,79 @@ adminRoutes.delete(
 
 // ********** START: GROUP ENDPOINTS ********** //
 /** Create a Group: Admin creates a group with name and members **/
-adminRoutes.post("/group", protectRoutes, adminOnly, async (req, res) => {
-  try {
-    const { name, members } = req.body; // members = array of schoolIds
+adminRoutes.post(
+  "/group/create",
+  protectRoutes,
+  adminOnly,
+  async (req, res) => {
+    try {
+      const { name, members } = req.body; // members = array of schoolIds
 
-    if (!name) {
-      return res.status(400).json({
+      if (!name) {
+        return res.status(400).json({
+          success: false,
+          message: "Group name and members (schoolIds) are required.",
+        });
+      }
+
+      // Ensure group name is unique
+      const existingGroup = await Group.findOne({ name: name.trim() });
+      if (existingGroup) {
+        return res.status(400).json({
+          success: false,
+          message: "Group name already exists.",
+        });
+      }
+
+      // Find users by schoolId
+      const users = await User.find({ schoolId: { $in: members } });
+
+      if (users.length !== members.length) {
+        return res.status(400).json({
+          success: false,
+          message: "One or more schoolIds do not exist in the system.",
+        });
+      }
+
+      // Check if any of these users already belong to another group
+      const conflict = await Group.findOne({
+        members: { $in: users.map((u) => u._id) },
+      });
+      if (conflict) {
+        return res.status(400).json({
+          success: false,
+          message: "One or more members already belong to another group.",
+        });
+      }
+
+      // Create group with ObjectIds of users
+      const newGroup = new Group({
+        name: name.trim(),
+        members: users.map((u) => u._id),
+      });
+
+      await newGroup.save();
+
+      // Update each user with group reference
+      await User.updateMany(
+        { _id: { $in: users.map((u) => u._id) } },
+        { $set: { group: newGroup._id } }
+      );
+
+      res.status(201).json({
+        success: true,
+        message: "Group created successfully.",
+        group: newGroup,
+      });
+    } catch (error) {
+      console.error("Error in POST /groups:", error);
+      return res.status(500).json({
         success: false,
-        message: "Group name and members (schoolIds) are required.",
+        message: `Internal Server Error: ${error.message}`,
       });
     }
-
-    // Ensure group name is unique
-    const existingGroup = await Group.findOne({ name: name.trim() });
-    if (existingGroup) {
-      return res.status(400).json({
-        success: false,
-        message: "Group name already exists.",
-      });
-    }
-
-    // Find users by schoolId
-    const users = await User.find({ schoolId: { $in: members } });
-
-    if (users.length !== members.length) {
-      return res.status(400).json({
-        success: false,
-        message: "One or more schoolIds do not exist in the system.",
-      });
-    }
-
-    // Check if any of these users already belong to another group
-    const conflict = await Group.findOne({
-      members: { $in: users.map((u) => u._id) },
-    });
-    if (conflict) {
-      return res.status(400).json({
-        success: false,
-        message: "One or more members already belong to another group.",
-      });
-    }
-
-    // Create group with ObjectIds of users
-    const newGroup = new Group({
-      name: name.trim(),
-      members: users.map((u) => u._id),
-    });
-
-    await newGroup.save();
-
-    // Update each user with group reference
-    await User.updateMany(
-      { _id: { $in: users.map((u) => u._id) } },
-      { $set: { group: newGroup._id } }
-    );
-
-    res.status(201).json({
-      success: true,
-      message: "Group created successfully.",
-      group: newGroup,
-    });
-  } catch (error) {
-    console.error("Error in POST /groups:", error);
-    return res.status(500).json({
-      success: false,
-      message: `Internal Server Error: ${error.message}`,
-    });
   }
-});
+);
 
 /** Fetch All Groups **/
 adminRoutes.get(
@@ -462,7 +551,7 @@ adminRoutes.post(
 
 /** Remove a single member from a group **/
 adminRoutes.delete(
-  "group/:groupId/members/:userId",
+  "/group/:groupId/members/:userId",
   protectRoutes,
   adminOnly,
   async (req, res) => {
@@ -509,78 +598,88 @@ adminRoutes.delete(
 );
 
 /** Update Group Name **/
-adminRoutes.put("group/:id", protectRoutes, adminOnly, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { name } = req.body;
+adminRoutes.put(
+  "/group/update/:id",
+  protectRoutes,
+  adminOnly,
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { name } = req.body;
 
-    if (!name || !name.trim()) {
-      return res.status(400).json({
+      if (!name || !name.trim()) {
+        return res.status(400).json({
+          success: false,
+          message: "New group name is required.",
+        });
+      }
+
+      // Check if group exists
+      const group = await Group.findById(id);
+      if (!group) {
+        return res
+          .status(404)
+          .json({ success: false, message: "Group not found." });
+      }
+
+      // Ensure the new name is unique
+      const existingGroup = await Group.findOne({
+        name: name.trim(),
+        _id: { $ne: id },
+      });
+      if (existingGroup) {
+        return res.status(400).json({
+          success: false,
+          message: "Another group with this name already exists.",
+        });
+      }
+
+      group.name = name.trim();
+      await group.save();
+
+      res.status(200).json({
+        success: true,
+        message: "Group name updated successfully.",
+        group,
+      });
+    } catch (error) {
+      console.error("Error in PUT /groups/:id:", error);
+      return res.status(500).json({
         success: false,
-        message: "New group name is required.",
+        message: `Internal Server Error: ${error.message}`,
       });
     }
-
-    // Check if group exists
-    const group = await Group.findById(id);
-    if (!group) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Group not found." });
-    }
-
-    // Ensure the new name is unique
-    const existingGroup = await Group.findOne({
-      name: name.trim(),
-      _id: { $ne: id },
-    });
-    if (existingGroup) {
-      return res.status(400).json({
-        success: false,
-        message: "Another group with this name already exists.",
-      });
-    }
-
-    group.name = name.trim();
-    await group.save();
-
-    res.status(200).json({
-      success: true,
-      message: "Group name updated successfully.",
-      group,
-    });
-  } catch (error) {
-    console.error("Error in PUT /groups/:id:", error);
-    return res.status(500).json({
-      success: false,
-      message: `Internal Server Error: ${error.message}`,
-    });
   }
-});
+);
 
 /** Delete an entire Group **/
-adminRoutes.delete("group/:id", protectRoutes, adminOnly, async (req, res) => {
-  try {
-    const group = await Group.findById(req.params.id);
+adminRoutes.delete(
+  "/group/delete/:id",
+  protectRoutes,
+  adminOnly,
+  async (req, res) => {
+    try {
+      const group = await Group.findById(req.params.id);
 
-    if (!group) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Group not found." });
+      if (!group) {
+        return res
+          .status(404)
+          .json({ success: false, message: "Group not found." });
+      }
+
+      await group.deleteOne();
+      res
+        .status(200)
+        .json({ success: true, message: "Group deleted successfully." });
+    } catch (error) {
+      console.error("Error in DELETE /groups/:id:", error);
+      return res.status(500).json({
+        success: false,
+        message: `Internal Server Error: ${error.message}`,
+      });
     }
-
-    await group.deleteOne();
-    res
-      .status(200)
-      .json({ success: true, message: "Group deleted successfully." });
-  } catch (error) {
-    console.error("Error in DELETE /groups/:id:", error);
-    return res.status(500).json({
-      success: false,
-      message: `Internal Server Error: ${error.message}`,
-    });
   }
-});
+);
 
 // ********** END: GROUP ENDPOINTS ********** //
 
@@ -617,7 +716,7 @@ adminRoutes.get(
       if (existingAttendance) {
         return res.status(400).json({
           success: false,
-          message: "Attendance already marked for today.",
+          message: "Student already has attendance today",
         });
       }
 

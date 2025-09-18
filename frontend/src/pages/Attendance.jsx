@@ -5,58 +5,38 @@
  * Full license terms available in LICENSE.md
  */
 
-import React, { useState } from "react";
+import { useState } from "react";
 import { Scanner } from "@yudiel/react-qr-scanner";
-import { toast } from "react-toastify";
-import "react-toastify/dist/ReactToastify.css";
 import { useAuth } from "../context/AuthContext";
 // import api from "../api/api";
+
+// Toast
+import { showSuccessToast, showErrorToast } from "../utils/toast";
+import { markAttendance } from "../api";
 
 const Attendance = () => {
   const { user, token } = useAuth();
   const [loading, setLoading] = useState(false);
 
-  const handleScan = async (scannedUrl) => {
-    if (!scannedUrl) return;
+  const handleScan = async (schoolId) => {
+    if (!schoolId) return;
 
-    console.log("Scanned URL:", scannedUrl);
+    console.log("Scanned schoolId:", schoolId);
 
-    // Extract schoolId from the URL (last path segment)
-    const parts = scannedUrl.split("/");
-    const schoolId = parts[parts.length - 1];
-
-    console.log("Extracted schoolId:", schoolId);
+    // vibrate feedback
+    if (navigator.vibrate) navigator.vibrate(300);
 
     setLoading(true);
     try {
-      const res = await api.get(`/attendance/mark/${schoolId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      // Axios automatically parses JSON, so `res.data`
+      const res = await markAttendance(schoolId);
       if (res.data?.success) {
-        toast.success("Attendance Marked", {
-          position: "top-right",
-          autoClose: 4000,
-          hideProgressBar: false,
-          closeOnClick: true,
-          pauseOnHover: true,
-          draggable: true,
-          theme: "light",
-        });
+        showSuccessToast(res.data.message);
       } else {
-        throw new Error(res.data?.message || "Failed to mark attendance");
+        showErrorToast(res.data.message);
       }
-    } catch (error) {
-      toast.error(error.message || "Something went wrong", {
-        position: "top-right",
-        autoClose: 4000,
-        hideProgressBar: false,
-        closeOnClick: true,
-        pauseOnHover: true,
-        draggable: true,
-        theme: "light",
-      });
+    } catch (err) {
+      showErrorToast(err.response?.data.message || "Scan failed");
+      console.error("Update error:", err.response?.data || err.message);
     } finally {
       setLoading(false);
     }
@@ -83,6 +63,7 @@ const Attendance = () => {
             }}
             onError={(err) => console.error(err)}
             constraints={{ facingMode: "environment" }}
+            scanDelay={2000} // throttles repeated scans
             className="w-full"
           />
         </div>

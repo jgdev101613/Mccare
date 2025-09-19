@@ -17,6 +17,7 @@ import { showSuccessToast, showErrorToast } from "../utils/toast";
 import {
   adminfetchAllStudents,
   deleteStudent,
+  passwordReset,
   updateStudentInformation,
 } from "../api";
 
@@ -26,6 +27,7 @@ const Members = () => {
   const [search, setSearch] = useState("");
   const [editingUser, setEditingUser] = useState(null);
   const [deletingUser, setDeletingUser] = useState(null);
+  const [resettingUser, setResettingUser] = useState(null);
   const [previewImage, setPreviewImage] = useState(null);
 
   // Debounce search input
@@ -85,6 +87,21 @@ const Members = () => {
     }
   };
 
+  const handleResetPassword = async (id) => {
+    try {
+      const res = await passwordReset(id);
+      if (res.data.success) {
+        showSuccessToast("Password Reset successfully!");
+        setResettingUser(null);
+      } else {
+        showErrorToast(res.data.message);
+      }
+    } catch (err) {
+      showErrorToast(err.response?.data.message);
+      console.error("Delete error:", err.response?.data || err.message);
+    }
+  };
+
   // delete user
   const handleDelete = async (id) => {
     try {
@@ -118,7 +135,7 @@ const Members = () => {
         {filtered.map((user) => (
           <div
             key={user._id}
-            className="flex items-center justify-between p-4 bg-white rounded-lg shadow-md"
+            className="flex flex-col justify-between gap-2 p-4 bg-white rounded-lg shadow-md"
           >
             <div className="flex items-center gap-3">
               <img
@@ -140,12 +157,18 @@ const Members = () => {
               </div>
             </div>
 
-            <div className="flex flex-col gap-2">
+            <div className="flex gap-2">
               <button
                 onClick={() => setEditingUser(user)}
                 className="px-3 py-1 text-sm text-white bg-blue-500 rounded-lg"
               >
                 Edit
+              </button>
+              <button
+                onClick={() => setResettingUser(user)}
+                className="px-3 py-1 text-sm text-white bg-green-400 rounded-lg"
+              >
+                Reset Password
               </button>
               <button
                 onClick={() => setDeletingUser(user)}
@@ -295,6 +318,33 @@ const Members = () => {
                 onClick={() => handleDelete(deletingUser._id)}
               >
                 Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {resettingUser && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="w-11/12 max-w-sm p-6 text-center bg-white rounded-lg">
+            <h2 className="mb-4 text-lg font-bold">Reset Password</h2>
+            <p className="mb-6">
+              Are you sure you want to reset{" "}
+              <span className="font-semibold">{resettingUser.name}'s </span>
+              password?
+            </p>
+            <div className="flex justify-center space-x-3">
+              <button
+                className="px-4 py-2 bg-gray-300 rounded"
+                onClick={() => setResettingUser(null)}
+              >
+                Cancel
+              </button>
+              <button
+                className="px-4 py-2 text-white bg-red-600 rounded"
+                onClick={() => handleResetPassword(resettingUser._id)}
+              >
+                Reset
               </button>
             </div>
           </div>

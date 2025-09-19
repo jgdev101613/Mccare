@@ -177,8 +177,8 @@ const AdminDashboard = () => {
       }
       await fetchAllDuties();
       setShowModal(false); // quick refresh
-    } catch (err) {
-      console.error("Error saving duty:", err);
+    } catch (error) {
+      console.error("Error saving duty:", error);
     } finally {
       setIsLoading(false);
     }

@@ -5,11 +5,13 @@
  * Full license terms available in LICENSE.md
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 // import api from "../api/api";
 import {
   changePassword,
+  fetchUserAttendance,
+  fetchUserDuties,
   updateProfileImage,
   updateUserInformation,
 } from "../api";
@@ -20,6 +22,10 @@ import { PenLine, Camera, Download, Lock } from "lucide-react";
 
 // Toast
 import { showSuccessToast, showErrorToast } from "../utils/toast";
+
+// PDF
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 const Profile = () => {
   const { user, setUser, token } = useAuth();
@@ -42,6 +48,8 @@ const Profile = () => {
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [selectedImage, setSelectedImage] = useState(null);
+  const [attendance, setAttendance] = useState([]);
+  const [duties, setDuties] = useState([]);
 
   if (!user) {
     return (
@@ -50,6 +58,410 @@ const Profile = () => {
       </div>
     );
   }
+
+  // Fetch attendance
+  useEffect(() => {
+    const fetchAttendance = async () => {
+      try {
+        const { data } = await fetchUserAttendance(user.schoolId);
+        setAttendance(data.records || []);
+      } catch (err) {
+        const message =
+          err.response?.data?.message ||
+          "Failed to fetch attendance. Please try again.";
+        showErrorToast(message);
+      }
+    };
+
+    const fetchDuties = async () => {
+      try {
+        const { data } = await fetchUserDuties(user._id);
+        setDuties(data.duties || []);
+        console.log(duties);
+      } catch (err) {
+        const message =
+          err.response?.data?.message ||
+          "Failed to fetch duties. Please try again.";
+        console.error(message);
+      }
+    };
+
+    if (user?._id) {
+      fetchDuties();
+      fetchAttendance();
+    }
+  }, []);
+
+  // Generate Attendance PDF
+  const handleGenerateAttendancePDF = async () => {
+    if (attendance.length === 0)
+      return showErrorToast("You don't have an attendance yet.");
+    const records = attendance && attendance.length ? attendance : [];
+
+    // --- helper to load logo into a dataURL (avoids onload timing issues) ---
+    const loadImageAsDataURL = (url) =>
+      new Promise((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        img.onload = () => {
+          try {
+            const canvas = document.createElement("canvas");
+            canvas.width = img.width;
+            canvas.height = img.height;
+            const ctx = canvas.getContext("2d");
+            ctx.drawImage(img, 0, 0);
+            resolve(canvas.toDataURL("image/png"));
+          } catch (e) {
+            reject(e);
+          }
+        };
+        img.onerror = (e) => reject(e);
+        img.src = url;
+      });
+
+    // Attempt to load the logo; if it fails we just continue without logo
+    let logoDataUrl = null;
+    try {
+      logoDataUrl = await loadImageAsDataURL("/mcare.png");
+    } catch (err) {
+      // fallback: continue without logo
+      console.warn("Could not load logo for PDF watermark:", err);
+      logoDataUrl = null;
+    }
+
+    const doc = new jsPDF("p", "pt", "a4");
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margin = { top: 110, left: 40, right: 40, bottom: 60 };
+
+    // generated timestamp for footer (bottom-left)
+    const generatedAt = new Date().toLocaleString("en-PH", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    });
+
+    // prepare table rows (index, formatted date, formatted time)
+    const tableColumn = ["#", "Date", "Time In"];
+    const tableRows = records.map((record, i) => {
+      const dateObj = new Date(record.date);
+      const formattedDate = dateObj.toLocaleDateString("en-PH", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      });
+      // parse timeIn "HH:MM:SS"
+      const [h, m, s] = (record.timeIn || "00:00:00").split(":").map(Number);
+      const timeObj = new Date();
+      timeObj.setHours(h, m, s || 0);
+      const formattedTime = timeObj.toLocaleTimeString("en-PH", {
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+      });
+      return [i + 1, formattedDate, formattedTime];
+    });
+
+    // Generate table with header + repeated page hooks
+    autoTable(doc, {
+      head: [tableColumn],
+      body: tableRows,
+      margin,
+      styles: {
+        font: "helvetica",
+        fontSize: 10,
+        cellPadding: 6,
+        lineColor: [22, 163, 74], // green borders
+        lineWidth: 0.1,
+      },
+      headStyles: {
+        fillColor: [22, 163, 74], // green header
+        textColor: [255, 255, 255],
+        halign: "center",
+        valign: "middle",
+        fontSize: 12,
+        fontStyle: "bold",
+      },
+      bodyStyles: {
+        halign: "center",
+        valign: "middle",
+      },
+      alternateRowStyles: {
+        fillColor: [240, 253, 244], // light green row
+      },
+      // This is called for each page after table content - we draw header/footer/watermark here
+      didDrawPage: (data) => {
+        const pageNumber = data.pageNumber;
+
+        // --- faint logo watermark (center) ---
+        if (logoDataUrl) {
+          try {
+            doc.setGState(new doc.GState({ opacity: 0.06 }));
+            const imgW = 220;
+            const imgH = 220;
+            doc.addImage(
+              logoDataUrl,
+              "PNG",
+              (pageWidth - imgW) / 2,
+              (pageHeight - imgH) / 2,
+              imgW,
+              imgH,
+              undefined,
+              "FAST"
+            );
+            doc.setGState(new doc.GState({ opacity: 1 }));
+          } catch (e) {
+            // if setGState or addImage fails for some reason, ignore and continue
+            console.warn("logo watermark draw failed:", e);
+          }
+        }
+
+        // --- repeated watermark text (diagonal, faint) ---
+        try {
+          doc.setFontSize(48);
+          doc.setTextColor(150, 150, 150);
+          doc.setFont("helvetica", "bold");
+          doc.setGState(new doc.GState({ opacity: 0.06 }));
+          for (let y = 80; y < pageHeight; y += 180) {
+            for (let x = -50; x < pageWidth; x += 220) {
+              doc.text("MCare", x, y, { angle: 35 });
+            }
+          }
+          doc.setGState(new doc.GState({ opacity: 1 }));
+        } catch (e) {
+          // if GState isn't available in this environment, the watermark will still show lighter because of color
+          console.warn("watermark draw issue:", e);
+        }
+
+        // --- Header (on top so it's always readable) ---
+        doc.setFontSize(18);
+        doc.setTextColor(22, 163, 74);
+        doc.setFont("helvetica", "bold");
+        doc.text("Attendance Report", margin.left, 40);
+
+        doc.setFontSize(11);
+        doc.setTextColor(0, 0, 0);
+        doc.setFont("helvetica", "normal");
+        doc.text(`Name: ${user?.name || "Test User"}`, margin.left, 60);
+        doc.text(`School ID: ${user?.schoolId || "—"}`, margin.left, 76);
+
+        // --- Generated at (bottom-left) ---
+        doc.setFontSize(9);
+        doc.setTextColor(110);
+        doc.text(`Generated: ${generatedAt}`, margin.left, pageHeight - 30);
+
+        // --- Page number (bottom-right) ---
+        doc.text(
+          `Page ${pageNumber}`,
+          pageWidth - margin.right - 40,
+          pageHeight - 30
+        );
+      },
+    });
+
+    // finally save
+    doc.save(`${user?.username || "attendance"}_attendance.pdf`);
+  };
+
+  // Generate Duties PDF
+  const handleGenerateDutiesPDF = async () => {
+    if (duties.length === 0)
+      return showErrorToast("You don't have duties yet.");
+
+    const records = duties && duties.length ? duties : [];
+
+    // helper to load logo
+    const loadImageAsDataURL = (url) =>
+      new Promise((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        img.onload = () => {
+          try {
+            const canvas = document.createElement("canvas");
+            canvas.width = img.width;
+            canvas.height = img.height;
+            const ctx = canvas.getContext("2d");
+            ctx.drawImage(img, 0, 0);
+            resolve(canvas.toDataURL("image/png"));
+          } catch (e) {
+            reject(e);
+          }
+        };
+        img.onerror = (e) => reject(e);
+        img.src = url;
+      });
+
+    let logoDataUrl = null;
+    try {
+      logoDataUrl = await loadImageAsDataURL("/mcare.png");
+    } catch (err) {
+      console.warn("Could not load logo for PDF watermark:", err);
+      logoDataUrl = null;
+    }
+
+    const doc = new jsPDF("p", "pt", "a4");
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margin = { top: 110, left: 40, right: 40, bottom: 60 };
+
+    // generated timestamp for footer
+    const generatedAt = new Date().toLocaleString("en-PH", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    });
+
+    // Prepare table data
+    const tableColumn = [
+      "Date",
+      "Group",
+      "Time",
+      "Clinical Instructor",
+      "Place",
+      "Area",
+    ];
+    const tableRows = records.map((duty) => {
+      // Date
+      const dateObj = new Date(duty.date);
+      const formattedDate = dateObj.toLocaleDateString("en-PH", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      });
+
+      // Time (format range if possible)
+      let formattedTime = duty.time || "—";
+      try {
+        if (formattedTime.includes("-")) {
+          const [start, end] = formattedTime.split("-").map((t) => t.trim());
+          const convertTo12Hour = (t) => {
+            const [h, m] = t.split(":").map(Number);
+            const d = new Date();
+            d.setHours(h, m, 0);
+            return d.toLocaleTimeString("en-PH", {
+              hour: "numeric",
+              minute: "2-digit",
+              hour12: true,
+            });
+          };
+          formattedTime = `${convertTo12Hour(start)} - ${convertTo12Hour(end)}`;
+        }
+      } catch (err) {
+        console.warn("Time parse failed:", err);
+      }
+
+      return [
+        formattedDate,
+        duty.group?.name || "—",
+        formattedTime,
+        duty.clinicalInstructor || "—",
+        duty.place || "—",
+        duty.area || "—",
+      ];
+    });
+
+    // Table with header/footer/watermark
+    autoTable(doc, {
+      head: [tableColumn],
+      body: tableRows,
+      margin,
+      styles: {
+        font: "helvetica",
+        fontSize: 10,
+        cellPadding: 6,
+        lineColor: [22, 163, 74],
+        lineWidth: 0.1,
+      },
+      headStyles: {
+        fillColor: [22, 163, 74],
+        textColor: [255, 255, 255],
+        halign: "center",
+        valign: "middle",
+        fontSize: 12,
+        fontStyle: "bold",
+      },
+      bodyStyles: {
+        halign: "center",
+        valign: "middle",
+      },
+      alternateRowStyles: {
+        fillColor: [240, 253, 244],
+      },
+      didDrawPage: (data) => {
+        const pageNumber = data.pageNumber;
+
+        // watermark logo
+        if (logoDataUrl) {
+          try {
+            doc.setGState(new doc.GState({ opacity: 0.06 }));
+            const imgW = 220;
+            const imgH = 220;
+            doc.addImage(
+              logoDataUrl,
+              "PNG",
+              (pageWidth - imgW) / 2,
+              (pageHeight - imgH) / 2,
+              imgW,
+              imgH,
+              undefined,
+              "FAST"
+            );
+            doc.setGState(new doc.GState({ opacity: 1 }));
+          } catch (e) {
+            console.warn("logo watermark draw failed:", e);
+          }
+        }
+
+        // repeated text watermark
+        try {
+          doc.setFontSize(48);
+          doc.setTextColor(150, 150, 150);
+          doc.setFont("helvetica", "bold");
+          doc.setGState(new doc.GState({ opacity: 0.06 }));
+          for (let y = 80; y < pageHeight; y += 180) {
+            for (let x = -50; x < pageWidth; x += 220) {
+              doc.text("MCare", x, y, { angle: 35 });
+            }
+          }
+          doc.setGState(new doc.GState({ opacity: 1 }));
+        } catch (e) {
+          console.warn("watermark draw issue:", e);
+        }
+
+        // Header
+        doc.setFontSize(18);
+        doc.setTextColor(22, 163, 74);
+        doc.setFont("helvetica", "bold");
+        doc.text("Duties Report", margin.left, 40);
+
+        doc.setFontSize(11);
+        doc.setTextColor(0, 0, 0);
+        doc.setFont("helvetica", "normal");
+        doc.text(`Name: ${user?.name || "Test User"}`, margin.left, 60);
+        doc.text(`School ID: ${user?.schoolId || "—"}`, margin.left, 76);
+
+        // Footer
+        doc.setFontSize(9);
+        doc.setTextColor(110);
+        doc.text(`Generated: ${generatedAt}`, margin.left, pageHeight - 30);
+
+        doc.text(
+          `Page ${pageNumber}`,
+          pageWidth - margin.right - 40,
+          pageHeight - 30
+        );
+      },
+    });
+
+    // Save PDF
+    doc.save(`${user?.username || "duties"}_duties.pdf`);
+  };
 
   // Handle profile info update
   const handleSaveInfo = async () => {
@@ -295,6 +707,26 @@ const Profile = () => {
               <Download size={16} /> Download QR
             </button>
           </div>
+        </div>
+      )}
+
+      {user.role !== "admin" && (
+        <div className="flex flex-col">
+          <p className="mt-5 font-semibold text-center text-md">Data Reports</p>
+          <button
+            onClick={handleGenerateAttendancePDF}
+            className="flex items-center justify-center w-full gap-2 px-4 py-2 mt-4 text-white bg-blue-600 rounded-lg hover:bg-blue-700"
+          >
+            <Download size={16} />
+            Attendance PDF
+          </button>
+          <button
+            onClick={handleGenerateDutiesPDF}
+            className="flex items-center justify-center w-full gap-2 px-4 py-2 mt-4 text-white bg-blue-600 rounded-lg hover:bg-blue-700"
+          >
+            <Download size={16} />
+            Duties PDF
+          </button>
         </div>
       )}
 

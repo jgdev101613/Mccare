@@ -40,6 +40,10 @@ export const deleteStudent = (id) =>
   axiosWrapper.delete(`api/admin/students/delete/${id}`);
 export const markAttendance = (id) =>
   axiosWrapper.get(`api/admin/attendance/mark/${id}`);
+export const passwordReset = (id) =>
+  axiosWrapper.put(`api/auth/update/${id}/resetpassword`);
+export const fetchStudent = (id) =>
+  axiosWrapper.get(`api/admin/students/fetchStudent/${id}`);
 
 /** ADMIN/USER ENDPOINTS **/
 export const changePassword = (data, id) =>

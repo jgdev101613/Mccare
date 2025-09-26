@@ -666,7 +666,7 @@ const Profile = () => {
         <Info label="School ID" value={user.schoolId} />
         <Info
           label="Role"
-          value={user.role === "admin" ? "Admin" : "Student"}
+          value={user.role === "admin" ? "Admin/Professor" : "Student"}
         />
         <Info label="Name" value={user.name} />
         <Info label="Email" value={user.email} />
@@ -749,31 +749,35 @@ const Profile = () => {
                 />
               </div>
 
-              <div>
-                <label className="text-sm font-bold">Section:</label>
-                <input
-                  type="text"
-                  placeholder="section"
-                  value={formData.section}
-                  onChange={(e) =>
-                    setFormData({ ...formData, section: e.target.value })
-                  }
-                  className="w-full px-3 py-2 border rounded-lg"
-                />
-              </div>
+              {user.role === "user" && (
+                <>
+                  <div>
+                    <label className="text-sm font-bold">Section:</label>
+                    <input
+                      type="text"
+                      placeholder="section"
+                      value={formData.section}
+                      onChange={(e) =>
+                        setFormData({ ...formData, section: e.target.value })
+                      }
+                      className="w-full px-3 py-2 border rounded-lg"
+                    />
+                  </div>
 
-              <div>
-                <label className="text-sm font-bold">Course:</label>
-                <input
-                  type="text"
-                  placeholder="course"
-                  value={formData.course}
-                  onChange={(e) =>
-                    setFormData({ ...formData, course: e.target.value })
-                  }
-                  className="w-full px-3 py-2 border rounded-lg"
-                />
-              </div>
+                  <div>
+                    <label className="text-sm font-bold">Course:</label>
+                    <input
+                      type="text"
+                      placeholder="course"
+                      value={formData.course}
+                      onChange={(e) =>
+                        setFormData({ ...formData, course: e.target.value })
+                      }
+                      className="w-full px-3 py-2 border rounded-lg"
+                    />
+                  </div>
+                </>
+              )}
 
               <div>
                 <label className="text-sm font-bold">Department:</label>

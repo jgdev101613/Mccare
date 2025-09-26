@@ -23,6 +23,7 @@ import { format } from "date-fns-tz";
 import {
   sendDutyNotification,
   sendUpdateDutyNotification,
+  sendVerifiedEmailProf,
 } from "../lib/mailer.js";
 
 const adminRoutes = express.Router();
@@ -35,7 +36,7 @@ adminRoutes.get(
   adminOnly,
   async (req, res) => {
     try {
-      const users = await User.find({ role: "user" })
+      const users = await User.find()
         .select("-password")
         .populate("group", "name") // optional: show group name
         .lean();
@@ -171,15 +172,19 @@ adminRoutes.delete(
 /** Create a Duty (Create Duty: date, place, time, clinical) With Email Notif **/
 adminRoutes.post("/duty/create", protectRoutes, adminOnly, async (req, res) => {
   try {
-    const { groupId, date, place, time, clinicalInstructor, area } = req.body;
+    const { groupId, dates, date, place, time, clinicalInstructor, area } =
+      req.body;
 
-    if (!groupId || !date || !clinicalInstructor || !area) {
+    if (!groupId || (!dates && !date) || !clinicalInstructor || !area) {
       return res.status(400).json({
         success: false,
         message:
-          "All fields (group, date, place, time, clinicalInstructor, area) are required.",
+          "All fields (group, dates/date, place, time, clinicalInstructor, area) are required.",
       });
     }
+
+    // Ensure we always have an array
+    const dateList = Array.isArray(dates) ? dates : [date];
 
     // Check group exists
     const group = await Group.findById(groupId).populate("members");
@@ -189,51 +194,51 @@ adminRoutes.post("/duty/create", protectRoutes, adminOnly, async (req, res) => {
         .json({ success: false, message: "Group not found." });
     }
 
-    // Normalize date to ignore time portion (only check by day)
-    const startOfDay = new Date(date);
-    startOfDay.setHours(0, 0, 0, 0);
+    const createdDuties = [];
 
-    const endOfDay = new Date(date);
-    endOfDay.setHours(23, 59, 59, 999);
+    for (const d of dateList) {
+      const startOfDay = new Date(d);
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(d);
+      endOfDay.setHours(23, 59, 59, 999);
 
-    // Check if duty already exists for this group on the same day
-    const existingDuty = await Duty.findOne({
-      group: groupId,
-      date: { $gte: startOfDay, $lte: endOfDay },
-    });
-
-    if (existingDuty) {
-      return res.status(400).json({
-        success: false,
-        message: "This group already has a duty assigned on the same date.",
+      const existingDuty = await Duty.findOne({
+        group: groupId,
+        date: { $gte: startOfDay, $lte: endOfDay },
       });
+
+      if (existingDuty) {
+        // skip duplicates
+        continue;
+      }
+
+      const duty = await Duty.create({
+        group: groupId,
+        date: d,
+        place,
+        time,
+        clinicalInstructor,
+        area,
+      });
+
+      createdDuties.push(duty);
     }
 
-    // Create duty
-    const duty = await Duty.create({
-      group: groupId,
-      date,
-      place,
-      time,
-      clinicalInstructor,
-      area,
-    });
-
-    // Collect recipient info (email + name) from the group, not duty
+    // Collect recipients from the group
     const recipients = group.members.map((member) => ({
       email: member.email,
       name: member.name,
     }));
 
-    // Send notification
-    if (recipients.length > 0) {
-      await sendDutyNotification(recipients, duty, group.name);
+    // Send ONE notification with all duties
+    if (recipients.length > 0 && createdDuties.length > 0) {
+      await sendDutyNotification(recipients, createdDuties, group.name);
     }
 
     res.status(201).json({
       success: true,
-      message: "Duty created and assigned to group.",
-      duty,
+      message: `${createdDuties.length} duty(ies) created and assigned to group.`,
+      duties: createdDuties,
       assignedMembers: group.members,
     });
   } catch (error) {
@@ -829,5 +834,38 @@ adminRoutes.get(
 );
 
 // ********** END: ATTENDANCE ENDPOINTS ********** //
+
+// VERIFY
+adminRoutes.put(
+  "/professor/verify/:id",
+  protectRoutes,
+  adminOnly,
+  async (req, res) => {
+    try {
+      const user = await User.findByIdAndUpdate(
+        req.params.id,
+        { status: true, role: "admin" },
+        { new: true }
+      ).select("-password");
+
+      if (!user) {
+        return res
+          .status(404)
+          .json({ success: false, message: "User not found" });
+      }
+
+      sendVerifiedEmailProf(user);
+
+      res.json({
+        success: true,
+        message: "Verify successfully",
+        data: user,
+      });
+    } catch (error) {
+      console.error("❌ Verify error:", error.message);
+      res.status(500).json({ success: false, message: "Server error" });
+    }
+  }
+);
 
 export default adminRoutes;

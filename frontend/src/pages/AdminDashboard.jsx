@@ -1,12 +1,5 @@
-/*
- * Licensed Software
- * For authorized client use only.
- * Unauthorized modification or redistribution is prohibited.
- * Full license terms available in LICENSE.md
- */
-
 // src/pages/AdminDashboard.jsx
-import { useEffect, useState } from "react";
+import { useState, useMemo } from "react";
 import { useAuth } from "../context/AuthContext";
 import {
   format,
@@ -21,11 +14,8 @@ import {
   isSameDay,
 } from "date-fns";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-
-// Toaster
 import { toast } from "react-toastify";
 import { showSuccessToast, showErrorToast } from "../utils/toast";
-
 import {
   adminFetchAllStudentsDuties,
   adminFetchAllGroups,
@@ -33,21 +23,22 @@ import {
   updateDuty,
   deleteDuty,
 } from "../api";
+import { useQuery } from "@tanstack/react-query";
 
 const AdminDashboard = () => {
   const { user, token } = useAuth();
-  const [duties, setDuties] = useState([]);
-  const [groups, setGroups] = useState([]);
+
+  // calendar state
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [currentMonth, setCurrentMonth] = useState(new Date());
-  const [dutyMap, setDutyMap] = useState({});
+
+  // modal & form state
   const [showModal, setShowModal] = useState(false);
   const [editingDuty, setEditingDuty] = useState(null);
-  const [deletingDuty, setDeletingDuty] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [form, setForm] = useState({
     groupId: "",
-    date: "",
+    dates: [], // ⬅️ now an array instead of a single date
     place: "",
     timeFrom: "",
     timeTo: "",
@@ -55,67 +46,64 @@ const AdminDashboard = () => {
     area: "",
   });
 
-  const fetchAllDuties = async () => {
-    try {
+  // === React Query hooks ===
+  const {
+    data: dutiesData,
+    isLoading: dutiesLoading,
+    refetch: refetchDuties,
+  } = useQuery({
+    queryKey: ["adminDuties"],
+    queryFn: async () => {
       const { data } = await adminFetchAllStudentsDuties();
+      return data.duties || [];
+    },
+    enabled: !!token && user?.role === "admin",
+  });
 
-      setDuties(data.duties);
-
-      // map duties by date (yyyy-MM-dd)
-      const map = {};
-      data.duties.forEach((duty) => {
-        const dutyDate = format(new Date(duty.date), "yyyy-MM-dd");
-        if (!map[dutyDate]) map[dutyDate] = [];
-        map[dutyDate].push(duty);
-      });
-      setDutyMap(map);
-    } catch (err) {
-      console.error("Error fetching all duties (admin):", err);
-    }
-  };
-
-  const fetchGroups = async () => {
-    try {
+  const { data: groupsData = [], isLoading: groupsLoading } = useQuery({
+    queryKey: ["adminGroups"],
+    queryFn: async () => {
       const { data } = await adminFetchAllGroups();
-      setGroups(data.groups || []);
-    } catch (err) {
-      console.error("Error fetching groups:", err);
-    }
-  };
+      return data.groups || [];
+    },
+    enabled: !!token && user?.role === "admin",
+  });
 
-  // Fetch all duties
-  useEffect(() => {
-    if (token && user?.role === "admin") {
-      fetchAllDuties();
-      fetchGroups();
-    }
-  }, [user, token]);
+  // map duties by date
+  const dutyMap = useMemo(() => {
+    const map = {};
+    (dutiesData || []).forEach((duty) => {
+      const dutyDate = format(new Date(duty.date), "yyyy-MM-dd");
+      if (!map[dutyDate]) map[dutyDate] = [];
+      map[dutyDate].push(duty);
+    });
+    return map;
+  }, [dutiesData]);
+
+  const selectedDuties = dutyMap[format(selectedDate, "yyyy-MM-dd")] || [];
 
   // Calendar setup
   const monthStart = startOfMonth(currentMonth);
   const monthEnd = endOfMonth(currentMonth);
   const gridStart = startOfWeek(monthStart, { weekStartsOn: 0 });
   const gridEnd = endOfWeek(monthEnd, { weekStartsOn: 0 });
-
   const days = eachDayOfInterval({ start: gridStart, end: gridEnd });
 
   const handlePrevMonth = () => setCurrentMonth(subMonths(currentMonth, 1));
   const handleNextMonth = () => setCurrentMonth(addMonths(currentMonth, 1));
 
-  const selectedDuties = dutyMap[format(selectedDate, "yyyy-MM-dd")] || [];
-
-  // Handlers
-  const handleChange = (e) => {
+  // Form handling
+  const handleChange = (e) =>
     setForm({ ...form, [e.target.name]: e.target.value });
-  };
 
   const openAddModal = () => {
     setEditingDuty(null);
     setForm({
-      groupId: groups[0]?._id || "",
-      date: format(new Date(), "yyyy-MM-dd"),
+      groupId: groupsData[0]?._id || "",
+      dates: [], // 👈 start empty
       place: "",
-      time: "",
+      timeFrom: "",
+      timeTo: "",
       clinicalInstructor: "",
       area: "",
     });
@@ -124,61 +112,52 @@ const AdminDashboard = () => {
 
   const openEditModal = (duty) => {
     setEditingDuty(duty);
-
     const [from = "", to = ""] = (duty.time || "").split(" - ");
 
     setForm({
       groupId: duty.group?._id || "",
+      // if you want to support multiple dates, set it here
+      dates: duty.dates || [], // 👈 add this
       date: duty.date ? duty.date.split("T")[0] : "",
-      place: duty.place,
+      place: duty.place || "",
       timeFrom: from,
       timeTo: to,
-      clinicalInstructor: duty.clinicalInstructor,
-      area: duty.area,
+      clinicalInstructor: duty.clinicalInstructor || "",
+      area: duty.area || "",
     });
+
     setShowModal(true);
   };
 
   const handleSave = async (e) => {
     e.preventDefault();
     setIsLoading(true);
-    try {
-      const dutyPayload = {
-        ...form,
-        time: `${form.timeFrom} - ${form.timeTo}`, // store as string
-      };
 
+    try {
+      const time = `${form.timeFrom} - ${form.timeTo}`;
       if (editingDuty) {
-        // Edit duty
-        try {
-          const res = await updateDuty(editingDuty._id, dutyPayload);
-          if (res.data.success) {
-            showSuccessToast(res.data.message);
-          } else {
-            showErrorToast(res.data.message);
-          }
-        } catch (error) {
-          showErrorToast(err.response?.data.message);
-          console.error("Edit error:", err.response?.data || err.message);
-        }
+        // editing single duty (still one date)
+        const dutyPayload = { ...form, time, date: form.dates[0] };
+        const res = await updateDuty(editingDuty._id, dutyPayload);
+        res.data.success
+          ? showSuccessToast(res.data.message)
+          : showErrorToast(res.data.message);
       } else {
-        // Add duty
-        try {
-          const res = await createDuty(dutyPayload);
-          if (res.data.success) {
-            showSuccessToast(res.data.message);
-          } else {
-            showErrorToast(res.data.message);
-          }
-        } catch (error) {
-          showErrorToast(err.response?.data.message);
-          console.error("Edit error:", err.response?.data || err.message);
-        }
+        // creating new duties for all selected dates
+        const dutyPayload = {
+          ...form, // includes dates: [ '2025-09-27', '2025-09-28', ... ]
+          time: `${form.timeFrom} - ${form.timeTo}`,
+        };
+
+        await createDuty(dutyPayload); // no loop
+        showSuccessToast("Duties created successfully!");
       }
-      await fetchAllDuties();
-      setShowModal(false); // quick refresh
+
+      await refetchDuties();
+      setShowModal(false);
     } catch (error) {
-      console.error("Error saving duty:", error);
+      showErrorToast(error.response?.data?.message || "Error saving duty");
+      console.error(error);
     } finally {
       setIsLoading(false);
     }
@@ -198,7 +177,7 @@ const AdminDashboard = () => {
               onClick={async () => {
                 try {
                   await deleteDuty(duty._id);
-                  await fetchAllDuties();
+                  await refetchDuties();
                   showSuccessToast("Duty deleted successfully!");
                 } catch (err) {
                   showErrorToast(
@@ -219,10 +198,11 @@ const AdminDashboard = () => {
           </div>
         </div>
       ),
-      { autoClose: false } // keep it open until user acts
+      { autoClose: false }
     );
   };
 
+  // === JSX ===
   return (
     <div>
       {/* Calendar header */}
@@ -234,11 +214,9 @@ const AdminDashboard = () => {
           >
             <ChevronLeft className="w-5 h-5" />
           </button>
-
           <h2 className="text-xl font-bold text-gray-800">
             {format(currentMonth, "MMMM yyyy")}
           </h2>
-
           <button
             onClick={handleNextMonth}
             className="p-2 text-green-700 transition rounded-full hover:bg-green-100"
@@ -286,7 +264,6 @@ const AdminDashboard = () => {
                   ${isToday && !isSelected ? "text-green-600" : ""}`}
               >
                 <span>{format(day, "d")}</span>
-
                 {hasDuty && !isSelected && (
                   <span className="absolute w-2 h-2 bg-green-500 rounded-full bottom-1"></span>
                 )}
@@ -303,11 +280,12 @@ const AdminDashboard = () => {
         </h3>
 
         {selectedDuties.length > 0 ? (
-          selectedDuties.map((duty, i) => (
+          selectedDuties.map((duty) => (
             <div
-              key={duty._id || i}
+              key={duty._id}
               className="p-4 mb-3 border rounded-xl bg-green-50 hover:shadow"
             >
+              {/* Duty details */}
               <p className="text-sm text-gray-700">
                 <span className="font-semibold">Group:</span>{" "}
                 {duty?.group?.name || "—"}
@@ -332,6 +310,7 @@ const AdminDashboard = () => {
                   ? duty.group.members.map((m) => m.name).join(", ")
                   : "—"}
               </p>
+
               <div className="flex gap-2">
                 <button
                   onClick={() => openEditModal(duty)}
@@ -341,7 +320,7 @@ const AdminDashboard = () => {
                 </button>
                 <button
                   onClick={(e) => handleDelete(e, duty)}
-                  className="px-3 py-1 mt-2 text-white transition bg-red-500 rounded hover:bg-yellow-600"
+                  className="px-3 py-1 mt-2 text-white transition bg-red-500 rounded hover:bg-red-600"
                 >
                   Delete Duty
                 </button>
@@ -355,112 +334,142 @@ const AdminDashboard = () => {
 
       {/* Modal */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
-          <div className="p-6 bg-white shadow-lg rounded-xl w-96">
-            <h2 className="mb-4 text-lg font-bold text-green-700">
-              {editingDuty ? "Edit Duty" : "Add Duty"}
-            </h2>
+        <div className="fixed inset-0 z-50 flex items-center justify-center pt-10 pb-10 bg-black bg-opacity-40">
+          <div className="max-h-screen overflow-y-auto">
+            <div className="p-6 bg-white shadow-lg rounded-xl w-96">
+              <h2 className="mb-4 text-lg font-bold text-green-700">
+                {editingDuty ? "Edit Duty" : "Add Duty"}
+              </h2>
 
-            {/* Only select group when adding */}
-            {!editingDuty && (
+              {/* Only select group when adding */}
+              {!editingDuty && (
+                <div className="mb-3">
+                  <label className="block text-sm font-medium">Group</label>
+                  <select
+                    name="groupId"
+                    value={form.groupId}
+                    onChange={handleChange}
+                    className="w-full p-2 border rounded"
+                  >
+                    {groupsData.map((g) => (
+                      <option key={g._id} value={g._id}>
+                        {g.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* other form fields */}
               <div className="mb-3">
-                <label className="block text-sm font-medium">Group</label>
-                <select
-                  name="groupId"
-                  value={form.groupId}
+                <label className="block text-sm font-medium">Dates</label>
+                <input
+                  type="date"
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      dates: [...form.dates, e.target.value],
+                    })
+                  }
+                  className="w-full p-2 border rounded"
+                />
+
+                {form.dates.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {form.dates.map((date) => (
+                      <span
+                        key={date}
+                        className="flex items-center gap-1 px-2 py-1 text-sm bg-green-100 rounded-full"
+                      >
+                        {date}
+                        <button
+                          onClick={() =>
+                            setForm({
+                              ...form,
+                              dates: form.dates.filter((d) => d !== date),
+                            })
+                          }
+                          className="text-red-500 hover:text-red-700"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="mb-3">
+                <label className="block text-sm font-medium">Place</label>
+                <input
+                  type="text"
+                  name="place"
+                  value={form.place}
                   onChange={handleChange}
                   className="w-full p-2 border rounded"
-                >
-                  {groups.map((g) => (
-                    <option key={g._id} value={g._id}>
-                      {g.name}
-                    </option>
-                  ))}
-                </select>
+                />
               </div>
-            )}
 
-            <div className="mb-3">
-              <label className="block text-sm font-medium">Date</label>
-              <input
-                type="date"
-                name="date"
-                value={form.date}
-                onChange={handleChange}
-                className="w-full p-2 border rounded"
-              />
-            </div>
+              <div className="mb-3">
+                <label className="block text-sm font-medium">From</label>
+                <input
+                  type="time"
+                  name="timeFrom"
+                  value={form.timeFrom}
+                  onChange={handleChange}
+                  className="w-full p-2 border rounded"
+                />
+              </div>
 
-            <div className="mb-3">
-              <label className="block text-sm font-medium">Place</label>
-              <input
-                type="text"
-                name="place"
-                value={form.place}
-                onChange={handleChange}
-                className="w-full p-2 border rounded"
-              />
-            </div>
+              <div className="mb-3">
+                <label className="block text-sm font-medium">To</label>
+                <input
+                  type="time"
+                  name="timeTo"
+                  value={form.timeTo}
+                  onChange={handleChange}
+                  className="w-full p-2 border rounded"
+                />
+              </div>
 
-            <div className="mb-3">
-              <label className="block text-sm font-medium">From</label>
-              <input
-                type="time"
-                name="timeFrom"
-                value={form.timeFrom}
-                onChange={handleChange}
-                className="w-full p-2 border rounded"
-              />
-            </div>
+              <div className="mb-3">
+                <label className="block text-sm font-medium">
+                  Clinical Instructor
+                </label>
+                <input
+                  type="text"
+                  name="clinicalInstructor"
+                  value={form.clinicalInstructor}
+                  onChange={handleChange}
+                  className="w-full p-2 border rounded"
+                />
+              </div>
 
-            <div className="mb-3">
-              <label className="block text-sm font-medium">To</label>
-              <input
-                type="time"
-                name="timeTo"
-                value={form.timeTo}
-                onChange={handleChange}
-                className="w-full p-2 border rounded"
-              />
-            </div>
+              <div className="mb-3">
+                <label className="block text-sm font-medium">Area</label>
+                <input
+                  type="text"
+                  name="area"
+                  value={form.area}
+                  onChange={handleChange}
+                  className="w-full p-2 border rounded"
+                />
+              </div>
 
-            <div className="mb-3">
-              <label className="block text-sm font-medium">
-                Clinical Instructor
-              </label>
-              <input
-                type="text"
-                name="clinicalInstructor"
-                value={form.clinicalInstructor}
-                onChange={handleChange}
-                className="w-full p-2 border rounded"
-              />
-            </div>
-
-            <div className="mb-3">
-              <label className="block text-sm font-medium">Area</label>
-              <input
-                type="text"
-                name="area"
-                value={form.area}
-                onChange={handleChange}
-                className="w-full p-2 border rounded"
-              />
-            </div>
-
-            <div className="flex justify-end mt-4 space-x-2">
-              <button
-                onClick={() => setShowModal(false)}
-                className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSave}
-                className="px-4 py-2 text-white bg-green-600 rounded hover:bg-green-700"
-              >
-                {isLoading ? "Loading.." : "Save"}
-              </button>
+              <div className="flex justify-end mt-4 space-x-2">
+                <button
+                  onClick={() => setShowModal(false)}
+                  className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSave}
+                  className="px-4 py-2 text-white bg-green-600 rounded hover:bg-green-700"
+                >
+                  {isLoading ? "Loading.." : "Save"}
+                </button>
+              </div>
             </div>
           </div>
         </div>

@@ -26,4 +26,19 @@ axiosWrapper.interceptors.request.use((config) => {
   return config;
 });
 
+//
+axiosWrapper.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response && error.response.status === 401) {
+      // 401 status indicates an expired token or invalid authentication
+      // Broadcast an event or trigger a logout action
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      window.dispatchEvent(new CustomEvent("token-expired"));
+    }
+    return Promise.reject(error);
+  }
+);
+
 export { axiosWrapper };

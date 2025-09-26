@@ -33,7 +33,7 @@ const Login = () => {
       });
       navigate("/dashboard");
     } catch (err) {
-      toast.error(`Invalid Credentials`, {
+      toast.error(err.response.data.message, {
         position: "top-right",
         autoClose: 5000,
         hideProgressBar: false,
@@ -79,9 +79,19 @@ const Login = () => {
           Login
         </button>
         <p className="mt-4 text-sm text-center">
-          Don’t have an account?{" "}
-          <Link to="/register" className="font-semibold text-yellow-600">
-            Register
+          <Link
+            to="/register"
+            className="font-semibold text-yellow-600 hover:underline"
+          >
+            Register Student Account
+          </Link>
+        </p>
+        <p className="text-sm text-center">
+          <Link
+            to="/prof-register"
+            className="font-semibold text-yellow-300 hover:underline"
+          >
+            Register Professor Account
           </Link>
         </p>
       </form>

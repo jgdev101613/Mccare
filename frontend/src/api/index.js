@@ -5,7 +5,6 @@
  * Full license terms available in LICENSE.md
  */
 
-import axios from "axios";
 import { axiosWrapper } from "./axiosWrapper";
 
 /** AUTH ENDPOINTS **/
@@ -23,7 +22,7 @@ export const adminFetchAllGroups = () =>
 export const searchGroup = (query) =>
   axiosWrapper.get(`api/admin/group/?search=${query}`);
 export const createGroup = (data) =>
-  axiosWrapper.put(`api/admin/group/create`, data);
+  axiosWrapper.post(`api/admin/group/create`, data);
 export const updateGroupName = (id, data) =>
   axiosWrapper.put(`api/admin/group/update/${id}`, data);
 export const addMembersToGroup = (id, data) =>
@@ -44,6 +43,8 @@ export const passwordReset = (id) =>
   axiosWrapper.put(`api/auth/update/${id}/resetpassword`);
 export const fetchStudent = (id) =>
   axiosWrapper.get(`api/admin/students/fetchStudent/${id}`);
+export const verifyProfessor = (id) =>
+  axiosWrapper.put(`api/admin/professor/verify/${id}`);
 
 /** ADMIN/USER ENDPOINTS **/
 export const changePassword = (data, id) =>

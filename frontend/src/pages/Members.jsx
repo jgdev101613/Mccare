@@ -23,6 +23,8 @@ import {
   verifyProfessor,
   fetchUserAttendance,
   fetchUserDuties,
+  fetchAllUserAttendance,
+  fetchAllDutiesOfGroup,
 } from "../api";
 
 // Icons
@@ -45,7 +47,9 @@ const Members = () => {
 
   // PDF
   const [attendance, setAttendance] = useState([]);
+  const [allAttendance, setAllAttendance] = useState([]);
   const [duties, setDuties] = useState([]);
+  const [allDuties, setAllDuties] = useState([]);
 
   // Debounce search input
   const debouncedSearch = useDebounce(search, 500);
@@ -177,6 +181,34 @@ const Members = () => {
       const message =
         err.response?.data?.message ||
         "Failed to fetch duties. Please try again.";
+      console.error(message);
+    }
+  };
+
+  const fetchAllAttendance = async () => {
+    try {
+      const { data } = await fetchAllUserAttendance();
+      const allAttendanceData = data.sections || [];
+      setAllAttendance(allAttendanceData);
+      handleGenerateAllAttendancePDF(allAttendanceData);
+    } catch (err) {
+      const message =
+        err.response?.data?.message ||
+        "Failed to fetch all attendance. Please try again.";
+      console.error(message);
+    }
+  };
+
+  const fetchAllDuties = async () => {
+    try {
+      const { data } = await fetchAllDutiesOfGroup();
+      const allDuties = data.groups || [];
+      setAllDuties(allDuties);
+      handleGenerateAllDutiesPDF(allDuties);
+    } catch (err) {
+      const message =
+        err.response?.data?.message ||
+        "Failed to fetch all attendance. Please try again.";
       console.error(message);
     }
   };
@@ -553,6 +585,369 @@ const Members = () => {
     doc.save(`${member?.username || "duties"}_duties.pdf`);
   };
 
+  const handleGenerateAllAttendancePDF = async (sectionsParam) => {
+    const sections = sectionsParam || allAttendance;
+    // expects array: [{ section: "BSN-3A", records: [...] }, { section: "BSN-3B", records: [...] }]
+    if (!sections || sections.length === 0) {
+      return showErrorToast("No attendance records available.");
+    }
+
+    // --- helper to load logo ---
+    const loadImageAsDataURL = (url) =>
+      new Promise((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        img.onload = () => {
+          try {
+            const canvas = document.createElement("canvas");
+            canvas.width = img.width;
+            canvas.height = img.height;
+            const ctx = canvas.getContext("2d");
+            ctx.drawImage(img, 0, 0);
+            resolve(canvas.toDataURL("image/png"));
+          } catch (e) {
+            reject(e);
+          }
+        };
+        img.onerror = (e) => reject(e);
+        img.src = url;
+      });
+
+    let logoDataUrl = null;
+    try {
+      logoDataUrl = await loadImageAsDataURL("/mcare.png");
+    } catch (err) {
+      console.warn("Could not load logo for PDF watermark:", err);
+    }
+
+    const doc = new jsPDF("p", "pt", "a4");
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margin = { top: 110, left: 40, right: 40, bottom: 60 };
+
+    const generatedAt = new Date().toLocaleString("en-PH", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    });
+
+    // Loop through sections
+    sections.forEach((section, sectionIndex) => {
+      if (sectionIndex > 0) {
+        doc.addPage();
+      }
+
+      // --- Prepare table rows ---
+      const tableColumn = ["#", "School ID", "Username", "Date", "Time In"];
+      const tableRows = section.records.map((record, i) => {
+        const dateObj = new Date(record.date);
+        const formattedDate = dateObj.toLocaleDateString("en-PH", {
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        });
+
+        const [h, m, s] = (record.timeIn || "00:00:00").split(":").map(Number);
+        const timeObj = new Date();
+        timeObj.setHours(h, m, s || 0);
+        const formattedTime = timeObj.toLocaleTimeString("en-PH", {
+          hour: "numeric",
+          minute: "2-digit",
+          hour12: true,
+        });
+
+        return [
+          i + 1,
+          record.user?.schoolId || "—",
+          record.user?.username || "—",
+          formattedDate,
+          formattedTime,
+        ];
+      });
+
+      autoTable(doc, {
+        head: [tableColumn],
+        body: tableRows,
+        margin,
+        styles: {
+          font: "helvetica",
+          fontSize: 10,
+          cellPadding: 6,
+          lineColor: [22, 163, 74],
+          lineWidth: 0.1,
+        },
+        headStyles: {
+          fillColor: [22, 163, 74],
+          textColor: [255, 255, 255],
+          halign: "center",
+          valign: "middle",
+          fontSize: 12,
+          fontStyle: "bold",
+        },
+        bodyStyles: {
+          halign: "center",
+          valign: "middle",
+        },
+        alternateRowStyles: {
+          fillColor: [240, 253, 244],
+        },
+        didDrawPage: (data) => {
+          const pageNumber = data.pageNumber;
+
+          // --- watermark logo ---
+          if (logoDataUrl) {
+            try {
+              doc.setGState(new doc.GState({ opacity: 0.06 }));
+              const imgW = 220;
+              const imgH = 220;
+              doc.addImage(
+                logoDataUrl,
+                "PNG",
+                (pageWidth - imgW) / 2,
+                (pageHeight - imgH) / 2,
+                imgW,
+                imgH,
+                undefined,
+                "FAST"
+              );
+              doc.setGState(new doc.GState({ opacity: 1 }));
+            } catch (e) {
+              console.warn("logo watermark draw failed:", e);
+            }
+          }
+
+          // --- watermark text ---
+          try {
+            doc.setFontSize(48);
+            doc.setTextColor(150, 150, 150);
+            doc.setFont("helvetica", "bold");
+            doc.setGState(new doc.GState({ opacity: 0.06 }));
+            for (let y = 80; y < pageHeight; y += 180) {
+              for (let x = -50; x < pageWidth; x += 220) {
+                doc.text("MCare", x, y, { angle: 35 });
+              }
+            }
+            doc.setGState(new doc.GState({ opacity: 1 }));
+          } catch (e) {
+            console.warn("watermark draw issue:", e);
+          }
+
+          // --- Header ---
+          doc.setFontSize(18);
+          doc.setTextColor(22, 163, 74);
+          doc.setFont("helvetica", "bold");
+          doc.text("Attendance Report", margin.left, 40);
+
+          doc.setFontSize(12);
+          doc.setTextColor(0, 0, 0);
+          doc.setFont("helvetica", "normal");
+          doc.text(`Section: ${section.section}`, margin.left, 60);
+          doc.text(`Total Records: ${section.records.length}`, margin.left, 76);
+
+          // --- Footer ---
+          doc.setFontSize(9);
+          doc.setTextColor(110);
+          doc.text(`Generated: ${generatedAt}`, margin.left, pageHeight - 30);
+          doc.text(
+            `Page ${pageNumber}`,
+            pageWidth - margin.right - 40,
+            pageHeight - 30
+          );
+        },
+      });
+    });
+
+    // Save the file
+    doc.save("attendance_by_section.pdf");
+  };
+
+  // Generate Duties PDF (All Groups)
+  const handleGenerateAllDutiesPDF = async (groupsParam) => {
+    const groups = groupsParam || allDuties; // expects array of groups with duties
+    if (!groups || groups.length === 0) {
+      return showErrorToast("No duties found for any group.");
+    }
+
+    // helper: load logo
+    const loadImageAsDataURL = (url) =>
+      new Promise((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        img.onload = () => {
+          try {
+            const canvas = document.createElement("canvas");
+            canvas.width = img.width;
+            canvas.height = img.height;
+            const ctx = canvas.getContext("2d");
+            ctx.drawImage(img, 0, 0);
+            resolve(canvas.toDataURL("image/png"));
+          } catch (e) {
+            reject(e);
+          }
+        };
+        img.onerror = (e) => reject(e);
+        img.src = url;
+      });
+
+    let logoDataUrl = null;
+    try {
+      logoDataUrl = await loadImageAsDataURL("/mcare.png");
+    } catch (err) {
+      console.warn("Could not load logo for PDF watermark:", err);
+      logoDataUrl = null;
+    }
+
+    const doc = new jsPDF("p", "pt", "a4");
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margin = { top: 110, left: 40, right: 40, bottom: 60 };
+
+    const generatedAt = new Date().toLocaleString("en-PH", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    });
+
+    // loop through each group and render duties
+    groups.forEach((group, groupIndex) => {
+      if (groupIndex > 0) {
+        doc.addPage(); // new page per group
+      }
+
+      // prepare rows for this group
+      const tableColumn = [
+        "Date",
+        "Time",
+        "Clinical Instructor",
+        "Place",
+        "Area",
+      ];
+      const tableRows = (group.duties || []).map((duty) => {
+        const dateObj = new Date(duty.date);
+        const formattedDate = dateObj.toLocaleDateString("en-PH", {
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        });
+        return [
+          formattedDate,
+          duty.time || "—",
+          duty.clinicalInstructor || "—",
+          duty.place || "—",
+          duty.area || "—",
+        ];
+      });
+
+      autoTable(doc, {
+        head: [tableColumn],
+        body: tableRows,
+        margin,
+        styles: {
+          font: "helvetica",
+          fontSize: 10,
+          cellPadding: 6,
+          lineColor: [22, 163, 74],
+          lineWidth: 0.1,
+        },
+        headStyles: {
+          fillColor: [22, 163, 74],
+          textColor: [255, 255, 255],
+          halign: "center",
+          valign: "middle",
+          fontSize: 12,
+          fontStyle: "bold",
+        },
+        bodyStyles: {
+          halign: "center",
+          valign: "middle",
+        },
+        alternateRowStyles: {
+          fillColor: [240, 253, 244],
+        },
+        didDrawPage: () => {
+          const pageNumber = doc.internal.getNumberOfPages();
+
+          // --- watermark logo
+          if (logoDataUrl) {
+            try {
+              doc.setGState(new doc.GState({ opacity: 0.06 }));
+              const imgW = 220;
+              const imgH = 220;
+              doc.addImage(
+                logoDataUrl,
+                "PNG",
+                (pageWidth - imgW) / 2,
+                (pageHeight - imgH) / 2,
+                imgW,
+                imgH,
+                undefined,
+                "FAST"
+              );
+              doc.setGState(new doc.GState({ opacity: 1 }));
+            } catch (e) {
+              console.warn("logo watermark draw failed:", e);
+            }
+          }
+
+          // --- repeated text watermark
+          try {
+            doc.setFontSize(48);
+            doc.setTextColor(150, 150, 150);
+            doc.setFont("helvetica", "bold");
+            doc.setGState(new doc.GState({ opacity: 0.06 }));
+            for (let y = 80; y < pageHeight; y += 180) {
+              for (let x = -50; x < pageWidth; x += 220) {
+                doc.text("MCare", x, y, { angle: 35 });
+              }
+            }
+            doc.setGState(new doc.GState({ opacity: 1 }));
+          } catch (e) {
+            console.warn("watermark draw issue:", e);
+          }
+
+          // --- Header for each group
+          doc.setFontSize(18);
+          doc.setTextColor(22, 163, 74);
+          doc.setFont("helvetica", "bold");
+          doc.text("Duties Report", margin.left, 40);
+
+          doc.setFontSize(12);
+          doc.setTextColor(0, 0, 0);
+          doc.setFont("helvetica", "normal");
+          doc.text(`Group: ${group.name}`, margin.left, 60);
+
+          // List members under header
+          if (group.members?.length) {
+            let memberNames = group.members.map((m) => m.name).join(", ");
+            doc.setFontSize(10);
+            doc.text(`Members: ${memberNames}`, margin.left, 76, {
+              maxWidth: pageWidth - margin.left - margin.right,
+            });
+          }
+
+          // --- Footer
+          doc.setFontSize(9);
+          doc.setTextColor(110);
+          doc.text(`Generated: ${generatedAt}`, margin.left, pageHeight - 30);
+          doc.text(
+            `Page ${pageNumber}`,
+            pageWidth - margin.right - 40,
+            pageHeight - 30
+          );
+        },
+      });
+    });
+
+    // save
+    doc.save("all_groups_duties.pdf");
+  };
+
   return (
     <div className="p-4">
       {/* Search */}
@@ -563,6 +958,26 @@ const Members = () => {
         onChange={handleSearch}
         className="w-full p-2 mb-4 border rounded-lg"
       />
+
+      <div className="mb-4">
+        <h1>Download Reports</h1>
+        <div className="flex gap-2">
+          <button
+            onClick={() => fetchAllAttendance()}
+            className="flex items-center justify-center w-full gap-2 px-4 py-1 text-sm text-white bg-green-600 rounded-lg hover:bg-green-700"
+          >
+            <Download size={16} />
+            All Attendance
+          </button>
+          <button
+            onClick={() => fetchAllDuties()}
+            className="flex items-center justify-center w-full gap-2 px-4 py-1 text-sm text-white bg-green-600 rounded-lg hover:bg-green-700"
+          >
+            <Download size={16} />
+            All Duties
+          </button>
+        </div>
+      </div>
 
       {/* Members List */}
       <div className="flex flex-col space-y-4">

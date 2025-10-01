@@ -63,7 +63,11 @@ export const deleteDuty = (id) =>
 /** STUDENT ENDPOINTS **/
 export const fetchUserDuties = (id) =>
   axiosWrapper.get(`/api/student/duties/fetchDuties/${id}`);
+export const fetchAllDutiesOfGroup = () =>
+  axiosWrapper.get(`/api/student/duties/fetchAllDuties`);
 export const fetchUserAttendance = (schoolId) =>
   axiosWrapper.get(`/api/student/attendance/fetchAttendance/${schoolId}`);
 export const updateUserInformation = (id, data) =>
   axiosWrapper.put(`/api/student/update/${id}/information`, data);
+export const fetchAllUserAttendance = () =>
+  axiosWrapper.get("/api/student/attendance/fetchAllAttendance");

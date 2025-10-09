@@ -25,6 +25,7 @@ import {
   fetchUserDuties,
   fetchAllUserAttendance,
   fetchAllDutiesOfGroup,
+  fetchAllDutiesPerArea,
 } from "../api";
 
 // Icons
@@ -50,6 +51,7 @@ const Members = () => {
   const [allAttendance, setAllAttendance] = useState([]);
   const [duties, setDuties] = useState([]);
   const [allDuties, setAllDuties] = useState([]);
+  const [allDutiesByArea, setAllDutiesByArea] = useState([]);
 
   // Debounce search input
   const debouncedSearch = useDebounce(search, 500);
@@ -201,9 +203,10 @@ const Members = () => {
 
   const fetchAllDuties = async () => {
     try {
-      const { data } = await fetchAllDutiesOfGroup();
-      const allDuties = data.groups || [];
-      setAllDuties(allDuties);
+      // const { data } = await fetchAllDutiesOfGroup();
+      const { data } = await fetchAllDutiesPerArea();
+      const allDuties = data.areas || [];
+      setAllDutiesByArea(allDuties);
       handleGenerateAllDutiesPDF(allDuties);
     } catch (err) {
       const message =
@@ -764,11 +767,11 @@ const Members = () => {
     doc.save("attendance_by_section.pdf");
   };
 
-  // Generate Duties PDF (All Groups)
-  const handleGenerateAllDutiesPDF = async (groupsParam) => {
-    const groups = groupsParam || allDuties; // expects array of groups with duties
-    if (!groups || groups.length === 0) {
-      return showErrorToast("No duties found for any group.");
+  // Generate Duties PDF (Per Area)
+  const handleGenerateAllDutiesPDF = async (areasParam) => {
+    const areas = areasParam || allDutiesByArea; // expects [{ area, duties: [...] }]
+    if (!areas || areas.length === 0) {
+      return showErrorToast("No duties found for any area.");
     }
 
     // helper: load logo
@@ -814,21 +817,21 @@ const Members = () => {
       hour12: true,
     });
 
-    // loop through each group and render duties
-    groups.forEach((group, groupIndex) => {
-      if (groupIndex > 0) {
-        doc.addPage(); // new page per group
-      }
+    // loop through each area and render duties
+    areas.forEach((areaItem, index) => {
+      if (index > 0) doc.addPage(); // new page per area
 
-      // prepare rows for this group
+      const { area, duties } = areaItem;
+
+      // prepare rows for this area
       const tableColumn = [
         "Date",
         "Time",
         "Clinical Instructor",
         "Place",
-        "Area",
+        "Group",
       ];
-      const tableRows = (group.duties || []).map((duty) => {
+      const tableRows = (duties || []).map((duty) => {
         const dateObj = new Date(duty.date);
         const formattedDate = dateObj.toLocaleDateString("en-PH", {
           year: "numeric",
@@ -840,7 +843,7 @@ const Members = () => {
           duty.time || "—",
           duty.clinicalInstructor || "—",
           duty.place || "—",
-          duty.area || "—",
+          duty.group?.name || "—",
         ];
       });
 
@@ -911,7 +914,7 @@ const Members = () => {
             console.warn("watermark draw issue:", e);
           }
 
-          // --- Header for each group
+          // --- Header for each area
           doc.setFontSize(18);
           doc.setTextColor(22, 163, 74);
           doc.setFont("helvetica", "bold");
@@ -920,16 +923,7 @@ const Members = () => {
           doc.setFontSize(12);
           doc.setTextColor(0, 0, 0);
           doc.setFont("helvetica", "normal");
-          doc.text(`Group: ${group.name}`, margin.left, 60);
-
-          // List members under header
-          if (group.members?.length) {
-            let memberNames = group.members.map((m) => m.name).join(", ");
-            doc.setFontSize(10);
-            doc.text(`Members: ${memberNames}`, margin.left, 76, {
-              maxWidth: pageWidth - margin.left - margin.right,
-            });
-          }
+          doc.text(`Area: ${area}`, margin.left, 60);
 
           // --- Footer
           doc.setFontSize(9);
@@ -945,7 +939,7 @@ const Members = () => {
     });
 
     // save
-    doc.save("all_groups_duties.pdf");
+    doc.save("all_areas_duties.pdf");
   };
 
   return (

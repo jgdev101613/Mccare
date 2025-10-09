@@ -65,6 +65,8 @@ export const fetchUserDuties = (id) =>
   axiosWrapper.get(`/api/student/duties/fetchDuties/${id}`);
 export const fetchAllDutiesOfGroup = () =>
   axiosWrapper.get(`/api/student/duties/fetchAllDuties`);
+export const fetchAllDutiesPerArea = () =>
+  axiosWrapper.get(`/api/student/duties/fetchAllDutiesByArea`);
 export const fetchUserAttendance = (schoolId) =>
   axiosWrapper.get(`/api/student/attendance/fetchAttendance/${schoolId}`);
 export const updateUserInformation = (id, data) =>
